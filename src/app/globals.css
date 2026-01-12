@@ -1,0 +1,263 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Fonts loaded via layout.tsx <link> tag for better performance */
+
+:root {
+  --font-arabic: var(--font-ibm-plex), system-ui, sans-serif;
+  --font-display: var(--font-amiri), serif;
+  --font-sans: var(--font-ibm-plex), system-ui, sans-serif;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    direction: rtl;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-ibm-plex), system-ui, sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    line-height: 1.7;
+    text-align: right;
+    direction: rtl;
+  }
+
+  /* Ensure all text elements are right-aligned in RTL */
+  h1, h2, h3, h4, h5, h6, p, span, label, div {
+    text-align: right;
+  }
+
+  /* Form elements RTL alignment */
+  input, textarea, select, button {
+    text-align: right;
+  }
+
+  input::placeholder, textarea::placeholder {
+    text-align: right;
+  }
+
+  h1, h2, h3 {
+    font-family: var(--font-amiri), serif;
+    @apply font-bold tracking-tight;
+  }
+
+  h1 {
+    @apply text-4xl md:text-5xl lg:text-6xl;
+  }
+
+  h2 {
+    @apply text-2xl md:text-3xl lg:text-4xl;
+  }
+
+  h3 {
+    @apply text-xl md:text-2xl;
+  }
+
+  /* Links */
+  a {
+    @apply transition-colors duration-200;
+  }
+
+  /* Selection */
+  ::selection {
+    @apply bg-primary-200 text-primary-900;
+  }
+
+  /* Focus visible */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-background;
+  }
+
+  /* RTL Support */
+  [dir="rtl"] {
+    direction: rtl;
+    text-align: right;
+  }
+
+  [dir="ltr"] {
+    direction: ltr;
+    text-align: left;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-muted;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-primary-300 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-primary-400;
+  }
+}
+
+@layer components {
+  /* Container */
+  .container {
+    @apply mx-auto max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Decorative elements */
+  .ornament {
+    @apply text-gold-600 text-2xl;
+  }
+
+  .ornament-star {
+    @apply inline-block;
+  }
+
+  .ornament-star::before {
+    content: '✦';
+  }
+
+  /* Quran verse styling */
+  .quran-verse {
+    font-family: 'Amiri', serif;
+    @apply text-2xl md:text-3xl leading-loose text-primary-900;
+    direction: rtl;
+  }
+
+  /* Islamic pattern overlay */
+  .pattern-overlay {
+    position: relative;
+  }
+
+  .pattern-overlay::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cpath fill='%231B4332' fill-opacity='0.03' d='M50 0L100 50L50 100L0 50z M50 10L90 50L50 90L10 50z M50 20L80 50L50 80L20 50z M50 30L70 50L50 70L30 50z M50 40L60 50L50 60L40 50z'/%3E%3C/svg%3E");
+    pointer-events: none;
+  }
+
+  /* Elegant section header */
+  .section-header {
+    @apply text-center mb-12;
+  }
+
+  .section-header h2 {
+    @apply text-primary-900 mb-4;
+  }
+
+  .section-header p {
+    @apply text-muted-foreground text-lg max-w-2xl mx-auto;
+  }
+
+  /* Feature card */
+  .feature-card {
+    @apply p-8 bg-white rounded-2xl border border-border/50 shadow-elegant;
+    @apply transition-all duration-300;
+    @apply hover:shadow-elegant-lg hover:-translate-y-1 hover:border-gold-200;
+  }
+
+  .feature-card-icon {
+    @apply w-14 h-14 rounded-xl flex items-center justify-center mb-6;
+    @apply bg-gradient-to-br from-primary-50 to-primary-100 text-primary-700;
+  }
+
+  /* Stats card */
+  .stat-card {
+    @apply text-center p-6 bg-white/50 backdrop-blur rounded-xl;
+  }
+
+  .stat-card-value {
+    @apply text-4xl font-bold text-primary-900 mb-2;
+    font-family: var(--font-display);
+  }
+
+  .stat-card-label {
+    @apply text-muted-foreground;
+  }
+
+  /* Hero section background */
+  .hero-bg {
+    @apply relative overflow-hidden;
+    background: linear-gradient(135deg, #1B4332 0%, #0F2419 50%, #1B4332 100%);
+  }
+
+  .hero-bg::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cpath fill='%23ffffff' fill-opacity='0.03' d='M50 0L100 50L50 100L0 50z M50 10L90 50L50 90L10 50z M50 20L80 50L50 80L20 50z M50 30L70 50L50 70L30 50z M50 40L60 50L50 60L40 50z'/%3E%3C/svg%3E");
+    pointer-events: none;
+  }
+
+  /* Bismillah ornament */
+  .bismillah {
+    font-family: 'Amiri', serif;
+    @apply text-gold-600 text-3xl md:text-4xl mb-8;
+    direction: rtl;
+  }
+
+  /* Auth card styling */
+  .auth-card {
+    @apply bg-white rounded-2xl shadow-elegant-lg p-8 md:p-10 border border-border/30;
+  }
+
+  /* Input styling override */
+  .input-elegant {
+    @apply h-12 px-4 rounded-xl border-border bg-muted/30;
+    @apply focus:bg-white focus:border-primary-300 focus:ring-primary-200;
+    @apply transition-all duration-200;
+  }
+
+  /* Button elegant */
+  .btn-elegant {
+    @apply h-12 px-6 rounded-xl font-medium;
+    @apply transition-all duration-200;
+  }
+
+  /* Animated gradient border */
+  .border-gradient {
+    position: relative;
+    background: white;
+    border-radius: 1rem;
+  }
+
+  .border-gradient::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: inherit;
+    background: linear-gradient(135deg, #B8860B 0%, #1B4332 50%, #B8860B 100%);
+    z-index: -1;
+  }
+}
+
+@layer utilities {
+  /* Animation delays */
+  .animation-delay-100 { animation-delay: 100ms; }
+  .animation-delay-200 { animation-delay: 200ms; }
+  .animation-delay-300 { animation-delay: 300ms; }
+  .animation-delay-400 { animation-delay: 400ms; }
+  .animation-delay-500 { animation-delay: 500ms; }
+
+  /* Text utilities */
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* RTL utilities */
+  .rtl {
+    direction: rtl;
+  }
+
+  .ltr {
+    direction: ltr;
+  }
+}
