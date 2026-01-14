@@ -13,20 +13,27 @@
 @layer base {
   * {
     @apply border-border;
+    font-family: inherit;
   }
 
   html {
     scroll-behavior: smooth;
     direction: rtl;
+    font-family: var(--font-ibm-plex), 'IBM Plex Sans Arabic', system-ui, sans-serif;
   }
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: var(--font-ibm-plex), system-ui, sans-serif;
+    font-family: var(--font-ibm-plex), 'IBM Plex Sans Arabic', system-ui, sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
     line-height: 1.7;
     text-align: right;
     direction: rtl;
+  }
+
+  /* Force Arabic font on all elements */
+  h1, h2, h3, h4, h5, h6, p, span, label, a, li, td, th, button, input, textarea, select, div {
+    font-family: var(--font-ibm-plex), 'IBM Plex Sans Arabic', system-ui, sans-serif;
   }
 
   /* Ensure all text elements are right-aligned in RTL */
@@ -43,9 +50,9 @@
     text-align: right;
   }
 
-  h1, h2, h3 {
-    font-family: var(--font-amiri), serif;
-    @apply font-bold tracking-tight;
+  /* All elements use the same font (IBM Plex Sans Arabic) */
+  .font-arabic, h1.font-arabic, h2.font-arabic, h3.font-arabic {
+    font-family: var(--font-ibm-plex), 'IBM Plex Sans Arabic', system-ui, sans-serif;
   }
 
   h1 {
