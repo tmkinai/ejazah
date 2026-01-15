@@ -13,13 +13,6 @@ export function createClient() {
         persistSession: true,
         autoRefreshToken: true,
       },
-      cookieOptions: {
-        name: 'sb-auth',
-        lifetime: 60 * 60 * 24 * 7, // 1 week
-        domain: '',
-        path: '/',
-        sameSite: 'lax',
-      },
     }
   )
 }
