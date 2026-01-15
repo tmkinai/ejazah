@@ -44,7 +44,7 @@ export default function StatsOverview() {
       if (error) throw error
 
       const now = new Date()
-      const thisMonth = ijazat?.filter((ijazah) => {
+      const thisMonth = ijazat?.filter((ijazah: any) => {
         const ijazahDate = new Date(ijazah.created_at)
         return (
           ijazahDate.getMonth() === now.getMonth() &&
@@ -53,10 +53,10 @@ export default function StatsOverview() {
       }) || []
 
       const uniqueStudents = new Set(
-        ijazat?.map((i) => i.student_id) || []
+        ijazat?.map((i: any) => i.student_id) || []
       ).size
 
-      const narrationTypes = (ijazat || []).reduce((acc: Record<string, number>, ijazah) => {
+      const narrationTypes = (ijazat || []).reduce((acc: Record<string, number>, ijazah: any) => {
         const type = ijazah.narration_type || 'غير محدد'
         acc[type] = (acc[type] || 0) + 1
         return acc

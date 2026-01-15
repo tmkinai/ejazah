@@ -76,14 +76,14 @@ export default function RequestsDashboard() {
 
       const statistics = {
         total: allRequests?.length || 0,
-        submitted: allRequests?.filter((r) => r.status === 'submitted').length || 0,
-        under_review: allRequests?.filter((r) => r.status === 'under_review').length || 0,
-        interview_scheduled: allRequests?.filter((r) => r.status === 'interview_scheduled').length || 0,
-        approved: allRequests?.filter((r) => r.status === 'approved').length || 0,
-        rejected: allRequests?.filter((r) => r.status === 'rejected').length || 0,
-        completed: allRequests?.filter((r) => r.status === 'completed').length || 0,
-        thisWeek: allRequests?.filter((r) => new Date(r.created_at) >= weekAgo).length || 0,
-        thisMonth: allRequests?.filter((r) => new Date(r.created_at) >= monthAgo).length || 0,
+        submitted: allRequests?.filter((r: any) => r.status === 'submitted').length || 0,
+        under_review: allRequests?.filter((r: any) => r.status === 'under_review').length || 0,
+        interview_scheduled: allRequests?.filter((r: any) => r.status === 'interview_scheduled').length || 0,
+        approved: allRequests?.filter((r: any) => r.status === 'approved').length || 0,
+        rejected: allRequests?.filter((r: any) => r.status === 'rejected').length || 0,
+        completed: allRequests?.filter((r: any) => r.status === 'completed').length || 0,
+        thisWeek: allRequests?.filter((r: any) => new Date(r.created_at) >= weekAgo).length || 0,
+        thisMonth: allRequests?.filter((r: any) => new Date(r.created_at) >= monthAgo).length || 0,
       }
 
       setStats(statistics)

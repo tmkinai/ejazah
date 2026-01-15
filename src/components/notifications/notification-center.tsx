@@ -73,7 +73,7 @@ export function NotificationCenter({ onClose }: NotificationCenterProps) {
       if (error) throw error
 
       setNotifications(data || [])
-      setUnreadCount(data?.filter(n => !n.is_read).length || 0)
+      setUnreadCount(data?.filter((n: any) => !n.is_read).length || 0)
     } catch (error) {
       console.error('Error loading notifications:', error)
     } finally {

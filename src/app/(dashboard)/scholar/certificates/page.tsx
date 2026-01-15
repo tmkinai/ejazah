@@ -68,8 +68,8 @@ export default function ScholarCertificatesPage() {
 
       setCertificates(transformed)
 
-      const active = transformed.filter(c => c.status === 'active').length
-      const thisMonth = transformed.filter(c => {
+      const active = transformed.filter((c: Certificate) => c.status === 'active').length
+      const thisMonth = transformed.filter((c: Certificate) => {
         const issueDate = new Date(c.issue_date)
         const now = new Date()
         return issueDate.getMonth() === now.getMonth() &&

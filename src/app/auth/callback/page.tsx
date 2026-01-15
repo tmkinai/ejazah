@@ -43,7 +43,7 @@ export default function AuthCallbackPage() {
         window.location.href = '/dashboard'
       } else {
         // Try listening for auth state change
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event: string, session: any) => {
           if (event === 'SIGNED_IN' && session) {
             subscription.unsubscribe()
             window.location.href = '/dashboard'

@@ -150,14 +150,14 @@ export default function ScholarDashboardPage() {
         .select('user_id')
         .eq('scholar_id', user.id)
 
-      const uniqueStudents = new Set(studentsData?.map(s => s.user_id)).size
+      const uniqueStudents = new Set(studentsData?.map((s: any) => s.user_id)).size
 
       // Calculate stats
-      const pending = transformedApps.filter(a => a.status === 'submitted').length
-      const underReview = transformedApps.filter(a => 
+      const pending = transformedApps.filter((a: Application) => a.status === 'submitted').length
+      const underReview = transformedApps.filter((a: Application) => 
         ['under_review', 'interview_scheduled'].includes(a.status)
       ).length
-      const completed = transformedApps.filter(a => a.status === 'approved').length
+      const completed = transformedApps.filter((a: Application) => a.status === 'approved').length
 
       setStats({
         pending,

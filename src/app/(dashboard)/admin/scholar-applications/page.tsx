@@ -109,9 +109,9 @@ export default function ScholarApplicationsPage() {
       setApplications(transformed)
 
       // Calculate stats
-      const pending = transformed.filter(a => a.status === 'pending').length
-      const approved = transformed.filter(a => a.status === 'approved').length
-      const rejected = transformed.filter(a => a.status === 'rejected').length
+      const pending = transformed.filter((a: ScholarApplication) => a.status === 'pending').length
+      const approved = transformed.filter((a: ScholarApplication) => a.status === 'approved').length
+      const rejected = transformed.filter((a: ScholarApplication) => a.status === 'rejected').length
 
       setStats({ pending, approved, rejected })
     } catch (error) {
