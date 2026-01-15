@@ -2,64 +2,77 @@
 
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 
 export function OAuthCodeHandler() {
   const searchParams = useSearchParams()
   const code = searchParams.get('code')
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [hasOAuthData, setHasOAuthData] = useState(false)
   
   useEffect(() => {
-    // Check for OAuth tokens in URL (hash fragment for implicit flow or code for PKCE)
-    const hashParams = new URLSearchParams(window.location.hash.substring(1))
-    const accessToken = hashParams.get('access_token')
+    // Check for OAuth data in URL on client side only
+    const hash = window.location.hash
+    const hasHash = hash.includes('access_token') || hash.includes('error')
     const hasCode = code !== null
     
-    if ((accessToken || hasCode) && !isProcessing) {
-      setIsProcessing(true)
+    if (hasHash || hasCode) {
+      setHasOAuthData(true)
       
-      const supabase = createClient()
-      
-      // For implicit flow, Supabase should detect the hash and set the session
-      // For PKCE flow, we need to handle the code
-      // Just check if we have a session after a short delay
-      const checkSession = async () => {
-        // Give Supabase time to process the auth callback
-        await new Promise(resolve => setTimeout(resolve, 500))
+      if (!isProcessing) {
+        setIsProcessing(true)
         
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-        
-        if (sessionError) {
-          console.error('Session error:', sessionError)
-          setError('حدث خطأ أثناء تسجيل الدخول')
+        // If there's a code, redirect to the callback route
+        if (hasCode) {
+          window.location.href = `/auth/callback?code=${code}`
           return
         }
         
-        if (session) {
-          // Clear the URL hash/params and redirect to dashboard
-          window.history.replaceState({}, document.title, window.location.pathname)
-          window.location.href = '/dashboard'
-        } else {
-          // Try one more time after a longer delay
-          await new Promise(resolve => setTimeout(resolve, 1000))
-          const { data: { session: retrySession } } = await supabase.auth.getSession()
+        // For hash-based auth (implicit flow), Supabase should handle it automatically
+        // Just wait and check if we're authenticated
+        const checkAuth = async () => {
+          // Import dynamically to avoid SSR issues
+          const { createClient } = await import('@/lib/supabase/client')
+          const supabase = createClient()
           
-          if (retrySession) {
-            window.history.replaceState({}, document.title, window.location.pathname)
-            window.location.href = '/dashboard'
-          } else {
-            setError('فشل تسجيل الدخول. يرجى المحاولة مرة أخرى.')
+          // Wait for Supabase to process the hash
+          await new Promise(resolve => setTimeout(resolve, 1000))
+          
+          try {
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+            
+            if (sessionError) {
+              console.error('Session error:', sessionError)
+              setError('حدث خطأ أثناء تسجيل الدخول')
+              return
+            }
+            
+            if (session) {
+              // Clear the URL hash and redirect to dashboard
+              window.history.replaceState({}, document.title, window.location.pathname)
+              window.location.href = '/dashboard'
+            } else {
+              // Check one more time
+              await new Promise(resolve => setTimeout(resolve, 1500))
+              const { data: { session: retrySession } } = await supabase.auth.getSession()
+              
+              if (retrySession) {
+                window.history.replaceState({}, document.title, window.location.pathname)
+                window.location.href = '/dashboard'
+              } else {
+                setError('فشل تسجيل الدخول. يرجى المحاولة مرة أخرى.')
+              }
+            }
+          } catch (err) {
+            console.error('Auth check error:', err)
+            setError('حدث خطأ غير متوقع')
           }
         }
+        
+        checkAuth()
       }
-      
-      checkSession()
     }
   }, [code, isProcessing])
-  
-  // Check if we have OAuth data in URL
-  const hasOAuthData = code !== null || (typeof window !== 'undefined' && window.location.hash.includes('access_token'))
   
   // Show loading while processing
   if (hasOAuthData || isProcessing) {

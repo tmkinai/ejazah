@@ -80,11 +80,6 @@ export function LoginForm() {
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
-        skipBrowserRedirect: false,
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent',
-        },
       },
     })
 
