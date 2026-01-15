@@ -2,10 +2,17 @@ import { Button } from '@/components/ui/button'
 import { Logo, Bismillah, OrnamentalDivider } from '@/components/shared/logo'
 import Link from 'next/link'
 import { BookOpen, Shield, Award, Users, CheckCircle, ArrowLeft } from 'lucide-react'
+import { Suspense } from 'react'
+import { OAuthCodeHandler } from '@/components/auth/OAuthCodeHandler'
 
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-background">
+      {/* Handle OAuth code if redirected here */}
+      <Suspense fallback={null}>
+        <OAuthCodeHandler />
+      </Suspense>
+      
       {/* Navigation */}
       <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-lg border-b border-border/50">
         <div className="container py-4 flex items-center justify-between">
