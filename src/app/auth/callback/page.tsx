@@ -1,73 +1,69 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Suspense } from 'react'
 
-function CallbackContent() {
-  const searchParams = useSearchParams()
+export default function AuthCallbackPage() {
   const [error, setError] = useState<string | null>(null)
-  const [isProcessing, setIsProcessing] = useState(true)
 
   useEffect(() => {
-    const handleCallback = async () => {
-      const code = searchParams.get('code')
-      const errorParam = searchParams.get('error')
-      const errorDescription = searchParams.get('error_description')
-
+    const handleAuth = async () => {
+      const supabase = createClient()
+      
+      // Check for error in URL
+      const hashParams = new URLSearchParams(window.location.hash.substring(1))
+      const urlParams = new URLSearchParams(window.location.search)
+      
+      const errorParam = hashParams.get('error') || urlParams.get('error')
+      const errorDescription = hashParams.get('error_description') || urlParams.get('error_description')
+      
       if (errorParam) {
         console.error('OAuth error:', errorParam, errorDescription)
         setError(errorDescription || 'فشل في المصادقة')
-        setIsProcessing(false)
         return
       }
-
-      if (!code) {
-        setError('لم يتم العثور على رمز المصادقة')
-        setIsProcessing(false)
+      
+      // With implicit flow, Supabase automatically detects the token in the hash
+      // and sets the session. We just need to wait and check.
+      
+      // Wait a moment for Supabase to process the hash
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Check if we have a session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      
+      if (sessionError) {
+        console.error('Session error:', sessionError)
+        setError('فشل في الحصول على الجلسة')
         return
       }
-
-      try {
-        const supabase = createClient()
-        
-        // Exchange the code for a session
-        const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
-        
-        if (exchangeError) {
-          console.error('Exchange error:', exchangeError)
-          
-          // If PKCE error, try to get session anyway (might already be set)
-          if (exchangeError.message?.includes('PKCE')) {
-            const { data: { session } } = await supabase.auth.getSession()
-            if (session) {
-              window.location.href = '/dashboard'
-              return
-            }
+      
+      if (session) {
+        // Success! Redirect to dashboard
+        window.location.href = '/dashboard'
+      } else {
+        // Try listening for auth state change
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+          if (event === 'SIGNED_IN' && session) {
+            subscription.unsubscribe()
+            window.location.href = '/dashboard'
           }
-          
-          setError('فشل في إتمام تسجيل الدخول')
-          setIsProcessing(false)
-          return
-        }
-
-        if (data.session) {
-          // Successfully authenticated
+        })
+        
+        // Wait a bit more and check again
+        await new Promise(resolve => setTimeout(resolve, 1500))
+        
+        const { data: { session: retrySession } } = await supabase.auth.getSession()
+        if (retrySession) {
           window.location.href = '/dashboard'
         } else {
-          setError('لم يتم الحصول على جلسة صالحة')
-          setIsProcessing(false)
+          setError('فشل في تسجيل الدخول. يرجى المحاولة مرة أخرى.')
         }
-      } catch (err) {
-        console.error('Callback error:', err)
-        setError('حدث خطأ غير متوقع')
-        setIsProcessing(false)
       }
     }
-
-    handleCallback()
-  }, [searchParams])
+    
+    handleAuth()
+  }, [])
 
   if (error) {
     return (
@@ -95,20 +91,5 @@ function CallbackContent() {
         <p className="text-muted-foreground">يرجى الانتظار...</p>
       </div>
     </div>
-  )
-}
-
-export default function AuthCallbackPage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary-900 mx-auto mb-6"></div>
-          <p className="text-muted-foreground">جاري التحميل...</p>
-        </div>
-      </div>
-    }>
-      <CallbackContent />
-    </Suspense>
   )
 }
