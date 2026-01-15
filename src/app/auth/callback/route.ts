@@ -1,7 +1,7 @@
-import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { NextResponse, type NextRequest } from 'next/server'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const code = searchParams.get('code')
   const error = searchParams.get('error')
@@ -17,8 +17,28 @@ export async function GET(request: Request) {
   }
 
   if (code) {
+    // Create response first so we can set cookies on it
+    const response = NextResponse.redirect(`${origin}${next}`)
+    
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return request.cookies.get(name)?.value
+          },
+          set(name: string, value: string, options: CookieOptions) {
+            response.cookies.set({ name, value, ...options })
+          },
+          remove(name: string, options: CookieOptions) {
+            response.cookies.set({ name, value: '', ...options })
+          },
+        },
+      }
+    )
+
     try {
-      const supabase = await createClient()
       const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
       
       if (exchangeError) {
@@ -27,8 +47,8 @@ export async function GET(request: Request) {
         return NextResponse.redirect(`${origin}/auth/login?error=${errorMessage}`)
       }
 
-      // Successfully authenticated - redirect to dashboard or next URL
-      return NextResponse.redirect(`${origin}${next}`)
+      // Successfully authenticated - return response with cookies set
+      return response
     } catch (err) {
       console.error('Unexpected error during auth callback:', err)
       return NextResponse.redirect(`${origin}/auth/login?error=Unexpected+error`)
