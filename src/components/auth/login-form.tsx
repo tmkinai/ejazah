@@ -34,9 +34,10 @@ export function LoginForm() {
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isValid },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
+    mode: 'onChange', // Enable real-time validation
   })
 
   const onSubmit = async (data: LoginFormData) => {
@@ -147,6 +148,8 @@ export function LoginForm() {
             {...register('email')}
             dir="ltr"
             aria-invalid={!!errors.email}
+            data-testid="login-email-input"
+            autoComplete="email"
           />
           {errors.email && (
             <p className="text-xs text-destructive">{errors.email.message}</p>
@@ -170,13 +173,20 @@ export function LoginForm() {
             {...register('password')}
             dir="ltr"
             aria-invalid={!!errors.password}
+            data-testid="login-password-input"
+            autoComplete="current-password"
           />
           {errors.password && (
             <p className="text-xs text-destructive">{errors.password.message}</p>
           )}
         </div>
 
-        <Button type="submit" className="w-full" disabled={loading}>
+        <Button 
+          type="submit" 
+          className="w-full" 
+          disabled={loading}
+          data-testid="login-submit-button"
+        >
           {loading && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
           تسجيل الدخول
         </Button>
