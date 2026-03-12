@@ -452,6 +452,9 @@ export default function CertificateView({ certificateId, onBack }: CertificateVi
         }
 
         .cert-scale-inner {
+          position: absolute;
+          top: 0;
+          left: 0;
           transform-origin: top left;
         }
         
