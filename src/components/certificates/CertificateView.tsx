@@ -27,26 +27,36 @@ export default function CertificateView({ certificateId, onBack }: CertificateVi
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const certificateRef = useRef<HTMLDivElement>(null)
+  const wrapperRef = useRef<HTMLDivElement>(null)
   const [isGenerating, setIsGenerating] = useState(false)
-  const [isMobile, setIsMobile] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [previewImage, setPreviewImage] = useState<string | null>(null)
   const [isPrinting, setIsPrinting] = useState(false)
+  const [certScale, setCertScale] = useState(1)
 
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768)
-    }
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
-  }, [])
+  const A4_WIDTH = 794
+  const A4_HEIGHT = 1123
 
   useEffect(() => {
     if (certificateId) {
       fetchData()
     }
   }, [certificateId])
+
+  // Scale certificate to fit container on all screen sizes
+  useEffect(() => {
+    if (!certificate) return
+    const updateScale = () => {
+      if (wrapperRef.current) {
+        const w = wrapperRef.current.offsetWidth
+        setCertScale(w / A4_WIDTH)
+      }
+    }
+    updateScale()
+    const observer = new ResizeObserver(updateScale)
+    if (wrapperRef.current) observer.observe(wrapperRef.current)
+    return () => observer.disconnect()
+  }, [certificate])
 
   const fetchData = async () => {
     try {
@@ -409,75 +419,7 @@ export default function CertificateView({ certificateId, onBack }: CertificateVi
     )
   }
 
-  // Mobile View
-  if (isMobile) {
-    return (
-      <div className="space-y-4 px-4 py-6">
-        <div className="text-center mb-6">
-          <h2 className="text-xl font-bold mb-2 font-arabic" style={{ color: primaryColor }}>
-            {certificateTitle}
-          </h2>
-          <p className="text-sm text-gray-600 font-arabic">{studentName}</p>
-          <p className="text-xs text-gray-500 font-arabic mt-1">رقم الإجازة: {serialNumber}</p>
-        </div>
-
-        <Button
-          onClick={downloadAsImage}
-          className="flex items-center justify-center gap-2 text-lg py-8 w-full"
-          style={{ backgroundColor: primaryColor }}
-          disabled={isGenerating}
-        >
-          {isGenerating ? (
-            <>
-              <Loader2 className="w-6 h-6 animate-spin ml-2" />
-              جاري إنشاء الصورة...
-            </>
-          ) : (
-            <>
-              <Download className="w-6 h-6" />
-              تحميل الشهادة (صورة)
-            </>
-          )}
-        </Button>
-        
-        <Button
-          variant="outline"
-          onClick={handleShare}
-          className="flex items-center justify-center gap-2 text-base py-6 w-full"
-        >
-          <Share2 className="w-5 h-5" />
-          مشاركة الرابط
-        </Button>
-
-        <div className="text-xs text-gray-500 text-center p-4 bg-blue-50 rounded-lg mt-6">
-          <p className="font-semibold mb-2">💡 ملاحظة:</p>
-          <p>سيتم تنزيل الشهادة بحجم كامل وبجودة عالية مناسبة للطباعة</p>
-        </div>
-
-        <div className="text-xs text-gray-500 text-center p-2 px-4 mt-4">
-          يمكن التحقق من صحة هذه الإجازة عبر زيارة: 
-          <a 
-            href={verificationUrl} 
-            className="block mt-1 break-all" 
-            style={{ color: primaryColor }}
-            target="_blank" 
-            rel="noopener noreferrer"
-          >
-            {verificationUrl}
-          </a>
-        </div>
-
-        {onBack && (
-          <Button onClick={onBack} variant="ghost" className="w-full mt-4">
-            <ArrowLeft className="w-4 h-4 ml-2" />
-            العودة
-          </Button>
-        )}
-      </div>
-    )
-  }
-
-  // Desktop View
+  // Unified View (all screen sizes — certificate scales to fit container)
   return (
     <div className="space-y-6">
       <style dangerouslySetInnerHTML={{ __html: `
@@ -503,50 +445,14 @@ export default function CertificateView({ certificateId, onBack }: CertificateVi
           letter-spacing: 2px;
         }
         
-        .A4-aspect {
+        .cert-scale-wrapper {
           width: 100%;
-          max-width: none;
-          padding-top: 141.42%;
+          overflow: hidden;
           position: relative;
         }
-        
-        @media (min-width: 1400px) {
-          .A4-aspect {
-            max-width: 1400px;
-            margin: 0 auto;
-          }
-        }
-        
-        .A4-content {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-        }
 
-        @media print {
-          @page { size: A4 portrait; margin: 0; }
-          body * { visibility: hidden !important; }
-          #print-certificate, #print-certificate * { visibility: visible !important; }
-          #print-certificate {
-            position: fixed !important;
-            inset: 0 !important;
-            width: 100vw !important;
-            height: 100vh !important;
-            background: white !important;
-            z-index: 99999 !important;
-          }
-          #print-certificate .A4-aspect {
-            padding-top: 0 !important;
-            width: 100% !important;
-            max-width: 100% !important;
-            height: 100vh !important;
-          }
-          #print-certificate .A4-content {
-            position: relative !important;
-            height: 100% !important;
-          }
+        .cert-scale-inner {
+          transform-origin: top left;
         }
         
         .security-watermark {
@@ -625,8 +531,8 @@ export default function CertificateView({ certificateId, onBack }: CertificateVi
         }
       `}} />
 
-      {/* Action Buttons */}
-      <div className="flex flex-wrap gap-3 justify-center items-center">
+      {/* Action Buttons — responsive for all screen sizes */}
+      <div className="flex flex-wrap gap-2 sm:gap-3 justify-center items-center px-2">
         {onBack && (
           <Button onClick={onBack} variant="ghost">
             <ArrowLeft className="w-4 h-4 ml-2" />
@@ -688,12 +594,20 @@ export default function CertificateView({ certificateId, onBack }: CertificateVi
         </Button>
       </div>
 
-      {/* Certificate */}
-      <div id="print-certificate" className="A4-aspect shadow-2xl w-full">
-        <div 
+      {/* Certificate — scales proportionally to fit any screen */}
+      <div
+        id="print-certificate"
+        ref={wrapperRef}
+        className="cert-scale-wrapper shadow-2xl w-full"
+        style={{ height: `${A4_HEIGHT * certScale}px` }}
+      >
+        <div
           ref={certificateRef}
-          className="A4-content bg-cover bg-center text-right flex flex-col p-8"
+          className="cert-scale-inner bg-cover bg-center text-right flex flex-col p-8"
           style={{
+            width: `${A4_WIDTH}px`,
+            height: `${A4_HEIGHT}px`,
+            transform: `scale(${certScale})`,
             backgroundImage: backgroundImage ? `url(${backgroundImage})` : 'none',
             backgroundColor: bgColor,
           }}
