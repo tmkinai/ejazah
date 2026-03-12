@@ -1,0 +1,444 @@
+[
+  {
+    "id": "TC001",
+    "title": "Email/Password Login Success",
+    "description": "Verify users can login successfully using correct email and password credentials.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to the login page."
+      },
+      {
+        "type": "action",
+        "description": "Enter a valid registered email address."
+      },
+      {
+        "type": "action",
+        "description": "Enter the correct password."
+      },
+      {
+        "type": "action",
+        "description": "Click the login button."
+      },
+      {
+        "type": "assertion",
+        "description": "Ensure that login is successful and user is redirected to the authorized dashboard based on their role."
+      }
+    ]
+  },
+  {
+    "id": "TC002",
+    "title": "Email/Password Login Failure with Incorrect Credentials",
+    "description": "Ensure login attempt fails when user enters incorrect email or password.",
+    "category": "error handling",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to the login page."
+      },
+      {
+        "type": "action",
+        "description": "Enter an invalid email or unregistered email."
+      },
+      {
+        "type": "action",
+        "description": "Enter an incorrect password."
+      },
+      {
+        "type": "action",
+        "description": "Click the login button."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify that login is rejected with an appropriate error message and no access is granted."
+      }
+    ]
+  },
+  {
+    "id": "TC003",
+    "title": "Role-based Access Control Enforcement",
+    "description": "Ensure that protected routes are accessible only by users with correct roles (student, scholar, admin) and access is denied otherwise.",
+    "category": "security",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Login as a student user."
+      },
+      {
+        "type": "action",
+        "description": "Attempt to access scholar dashboard and admin pages."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify access to scholar and admin pages is denied or redirected."
+      },
+      {
+        "type": "action",
+        "description": "Login as a scholar user."
+      },
+      {
+        "type": "action",
+        "description": "Attempt to access admin pages."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify access to admin pages is denied or redirected."
+      },
+      {
+        "type": "action",
+        "description": "Login as an admin user."
+      },
+      {
+        "type": "action",
+        "description": "Verify access to all dashboards is granted."
+      }
+    ]
+  },
+  {
+    "id": "TC004",
+    "title": "Multi-step Ijazah Application Creation and Draft Saving",
+    "description": "Verify students can create multi-step applications, progress through all steps, save drafts, and continue later without data loss.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Login as a student user and navigate to New Ijazah Application page."
+      },
+      {
+        "type": "action",
+        "description": "Fill in the first step with valid input data."
+      },
+      {
+        "type": "action",
+        "description": "Navigate to the next step of the application."
+      },
+      {
+        "type": "action",
+        "description": "Fill in subsequent steps with valid data."
+      },
+      {
+        "type": "action",
+        "description": "Select the option to save draft and exit."
+      },
+      {
+        "type": "action",
+        "description": "Logout and login again as the same student."
+      },
+      {
+        "type": "action",
+        "description": "Access the draft application and verify all previously entered data is retained."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm the draft application loads correctly and user can continue editing from the saved step."
+      }
+    ]
+  },
+  {
+    "id": "TC005",
+    "title": "Ijazah Application Input Validation",
+    "description": "Validate that all form fields enforce required input formats and show correct validation errors for invalid or missing data in multi-step application.",
+    "category": "error handling",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Start a new Ijazah application as student."
+      },
+      {
+        "type": "action",
+        "description": "Leave mandatory fields empty and attempt to proceed to the next step."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify validation messages are displayed for each empty required field."
+      },
+      {
+        "type": "action",
+        "description": "Enter invalid formats (e.g., incorrect date, invalid text characters) on input fields and try proceeding."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm validation errors appear preventing progression until corrected."
+      }
+    ]
+  },
+  {
+    "id": "TC006",
+    "title": "Document Upload Validation in Application Form",
+    "description": "Ensure uploaded supporting documents are properly validated for file type, size limits, and error messages are shown for invalid uploads.",
+    "category": "error handling",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Begin Ijazah application and navigate to document upload step."
+      },
+      {
+        "type": "action",
+        "description": "Attempt to upload unsupported file types (e.g., executables)."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify upload is rejected with appropriate error message about invalid file type."
+      },
+      {
+        "type": "action",
+        "description": "Attempt to upload files exceeding size limit."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm upload is rejected with file size error."
+      },
+      {
+        "type": "action",
+        "description": "Upload valid file types within size limits."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm files are successfully accepted and shown in the form."
+      }
+    ]
+  },
+  {
+    "id": "TC007",
+    "title": "Scholar Dashboard Application Review and Certificate Issuance",
+    "description": "Verify scholars can view assigned Ijazah applications, approve them, and issue certificates with correct data and formatting.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Login as scholar and access the application review dashboard."
+      },
+      {
+        "type": "action",
+        "description": "Select an application from the assigned list and review details."
+      },
+      {
+        "type": "action",
+        "description": "Approve the application."
+      },
+      {
+        "type": "action",
+        "description": "Issue a certificate for the approved application."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify that the certificate is generated with accurate scholar and student data."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm the certificate includes an embedded QR code and downloadable PDF format."
+      }
+    ]
+  },
+  {
+    "id": "TC008",
+    "title": "Certificate Verification via Public Page",
+    "description": "Ensure the public certificate verification page correctly validates certificate authenticity via QR code or certificate ID and logs verification attempts.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to the certificate verification public page."
+      },
+      {
+        "type": "action",
+        "description": "Scan a valid certificate QR code or enter a valid certificate ID."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm that the certificate is verified successfully and detailed information is displayed."
+      },
+      {
+        "type": "action",
+        "description": "Try scanning an invalid or revoked certificate QR code or entering invalid ID."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an appropriate error message shows and certificate is not validated."
+      },
+      {
+        "type": "action",
+        "description": "Verify that all verification attempts (valid and invalid) are logged correctly internally."
+      }
+    ]
+  },
+  {
+    "id": "TC009",
+    "title": "In-App Notification Delivery and Preferences",
+    "description": "Validate that users receive real-time in-app notifications, bell icon updates, and users can configure notification preferences successfully.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Login as any user and confirm notification bell icon shows unread notification count."
+      },
+      {
+        "type": "action",
+        "description": "Trigger a notification event (e.g. application status change)."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify notification appears instantly in notification center and bell icon updates."
+      },
+      {
+        "type": "action",
+        "description": "Navigate to notification settings and toggle different notification preferences."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm changes persist and reflect properly on subsequent notifications."
+      }
+    ]
+  },
+  {
+    "id": "TC010",
+    "title": "Email Notification Templates and Delivery",
+    "description": "Ensure email notifications for system events (application updates, certificate issuance) are sent timely with correct templates and content.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Trigger system event that generates an email notification (e.g. application approval)."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm that the respective email is sent to the user’s registered email address."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the email content matches the designed template with correct dynamic data."
+      }
+    ]
+  },
+  {
+    "id": "TC011",
+    "title": "RTL Layout Support Consistency",
+    "description": "Verify all pages and components render correctly in Arabic RTL mode without layout or typography issues.",
+    "category": "ui",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Switch application language to Arabic."
+      },
+      {
+        "type": "action",
+        "description": "Navigate through core pages including dashboards, application forms, and public pages."
+      },
+      {
+        "type": "assertion",
+        "description": "Ensure text alignment, component layout, and Arabic typography render correctly consistent with cultural conventions."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify no UI glitches, overlapping or misaligned elements occur."
+      }
+    ]
+  },
+  {
+    "id": "TC012",
+    "title": "Admin Dashboard User and Application Management",
+    "description": "Validate that admin can view, filter, search, and manage users, scholars, applications, and certificates effectively with real-time data.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Login as admin user and navigate to admin dashboard."
+      },
+      {
+        "type": "action",
+        "description": "Access and filter the users, scholar, application, and certificate management sections."
+      },
+      {
+        "type": "action",
+        "description": "Perform search queries and update user/application data."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify dashboard displays updated real-time data without performance lags."
+      },
+      {
+        "type": "action",
+        "description": "Review audit logs for changes made."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm audit logs accurately capture all management activities."
+      }
+    ]
+  },
+  {
+    "id": "TC013",
+    "title": "Performance Benchmark on Core Pages",
+    "description": "Ensure core pages load in under 3 seconds and achieve Lighthouse scores above 90 for performance and accessibility.",
+    "category": "performance",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Use performance testing tools to measure page load times of landing, dashboard, application form, and certificate pages."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm all page load times are under 3 seconds."
+      },
+      {
+        "type": "action",
+        "description": "Run Lighthouse audit for these pages."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify Lighthouse scores are equal or above 90 for performance, accessibility, best practices, and SEO."
+      }
+    ]
+  },
+  {
+    "id": "TC014",
+    "title": "User Profile and Settings Update",
+    "description": "Verify users can update their profiles, security settings, appearance preferences, and notification options successfully with correct persistence and validation.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Login as any user and navigate to profile/settings dashboard."
+      },
+      {
+        "type": "action",
+        "description": "Update profile fields (name, email, bio)."
+      },
+      {
+        "type": "action",
+        "description": "Change security settings (e.g. password update)."
+      },
+      {
+        "type": "action",
+        "description": "Adjust appearance preferences (light/dark mode)."
+      },
+      {
+        "type": "action",
+        "description": "Modify notification preferences."
+      },
+      {
+        "type": "action",
+        "description": "Save changes and reload settings page."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify all changes persist and display correctly on reload."
+      }
+    ]
+  }
+]

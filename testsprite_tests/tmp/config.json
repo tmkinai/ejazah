@@ -1,0 +1,18 @@
+{
+  "status": "commited",
+  "type": "frontend",
+  "scope": "codebase",
+  "localEndpoint": "http://localhost:3000",
+  "loginUser": "test@email.com",
+  "loginPassword": "F4rP$W_eiGEupvx",
+  "executionArgs": {
+    "projectName": "ejazah",
+    "projectPath": "F:\\projects\\ejazah\\ijazah-app",
+    "testIds": [],
+    "additionalInstruction": "",
+    "envs": {
+      "API_KEY": "sk-user-_gP0rU_oJ3SNZrTru_14y6Qa42EVprep226kOiQgIbjp3fVCxObh9lPnUhN1ZFbsTnAGeocbS2fYhBtMuh13vR95VZgUELKSnBcvhBQj0cigr-WP4_oeRumwPWRcNsXzl64"
+    }
+  },
+  "proxy": "http://d9707fea-83f9-46b4-b971-8ddc03bb5360:A8vW6oezi725guYkibOG6Kcye1ZLEjA0@tun.testsprite.com:8080"
+}

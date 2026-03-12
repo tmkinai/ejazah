@@ -1,0 +1,215 @@
+{
+  "tech_stack": [
+    "TypeScript",
+    "Next.js 14",
+    "React 18",
+    "Supabase (PostgreSQL)",
+    "Tailwind CSS",
+    "Radix UI",
+    "React Hook Form",
+    "Zod",
+    "Redux Toolkit",
+    "Framer Motion"
+  ],
+  "features": [
+    {
+      "name": "Authentication System",
+      "description": "Complete authentication system with email/password and Google OAuth, session management, and protected routes",
+      "files": [
+        "src/components/auth/login-form.tsx",
+        "src/components/auth/register-form.tsx",
+        "src/app/auth/login/page.tsx",
+        "src/app/auth/register/page.tsx",
+        "src/app/auth/callback/page.tsx",
+        "src/app/auth/layout.tsx",
+        "src/middleware.ts",
+        "src/lib/supabase/client.ts",
+        "src/lib/supabase/server.ts"
+      ]
+    },
+    {
+      "name": "Dashboard System",
+      "description": "Role-based dashboards for students, scholars, and admins with statistics and quick actions",
+      "files": [
+        "src/app/(dashboard)/dashboard/page.tsx",
+        "src/app/(dashboard)/layout.tsx",
+        "src/components/shared/DashboardHeader.tsx",
+        "src/components/admin/AdminSidebar.tsx",
+        "src/components/scholar/ScholarLayout.tsx",
+        "src/components/scholar/ScholarSidebar.tsx"
+      ]
+    },
+    {
+      "name": "Ijazah Application Management",
+      "description": "Multi-step application form for submitting Ijazah requests with validation and document upload",
+      "files": [
+        "src/app/(dashboard)/applications/page.tsx",
+        "src/app/(dashboard)/applications/new/page.tsx",
+        "src/components/applications/ijazah-application-form.tsx",
+        "src/app/api/applications/create/route.ts"
+      ]
+    },
+    {
+      "name": "Certificate Management",
+      "description": "Certificate generation, viewing, verification, and QR code integration",
+      "files": [
+        "src/app/(dashboard)/certificates/page.tsx",
+        "src/app/(dashboard)/certificates/[id]/page.tsx",
+        "src/app/certificate/page.tsx",
+        "src/app/verify/page.tsx",
+        "src/components/certificates/certificate-template.tsx",
+        "src/components/certificates/CertificateView.tsx",
+        "src/app/api/certificates/generate/route.ts"
+      ]
+    },
+    {
+      "name": "Scholar Management",
+      "description": "Scholar dashboard, biography management, student management, and application review",
+      "files": [
+        "src/app/(dashboard)/scholar/page.tsx",
+        "src/app/(dashboard)/scholar/biography/page.tsx",
+        "src/app/(dashboard)/scholar/students/page.tsx",
+        "src/app/(dashboard)/scholar/students/[id]/page.tsx",
+        "src/app/(dashboard)/scholar/applications/page.tsx",
+        "src/app/(dashboard)/scholar/applications/[id]/page.tsx",
+        "src/app/(dashboard)/scholar/certificates/page.tsx",
+        "src/app/(dashboard)/scholar/settings/page.tsx"
+      ]
+    },
+    {
+      "name": "Admin Management",
+      "description": "Admin dashboard with user management, scholar management, application oversight, and system settings",
+      "files": [
+        "src/app/(dashboard)/admin/page.tsx",
+        "src/app/(dashboard)/admin/users/page.tsx",
+        "src/app/(dashboard)/admin/scholars/page.tsx",
+        "src/app/(dashboard)/admin/scholars/new/page.tsx",
+        "src/app/(dashboard)/admin/applications/page.tsx",
+        "src/app/(dashboard)/admin/scholar-applications/page.tsx",
+        "src/app/(dashboard)/admin/scholar-applications/[id]/page.tsx",
+        "src/app/(dashboard)/admin/certificates/page.tsx",
+        "src/app/(dashboard)/admin/create-ijazah/page.tsx",
+        "src/app/(dashboard)/admin/settings/page.tsx",
+        "src/components/admin/RequestsDashboard.tsx",
+        "src/components/admin/StatsOverview.tsx",
+        "src/components/admin/SettingsPanel.tsx",
+        "src/components/admin/RequestManagement.tsx",
+        "src/components/admin/RequestListItem.tsx",
+        "src/components/admin/RequestDetails.tsx",
+        "src/components/admin/IjazahList.tsx",
+        "src/components/admin/StudentsManagement.tsx"
+      ]
+    },
+    {
+      "name": "Notification System",
+      "description": "In-app notifications with bell icon, notification center, and user preferences",
+      "files": [
+        "src/components/notifications/notification-bell.tsx",
+        "src/components/notifications/notification-center.tsx",
+        "src/app/(dashboard)/settings/notifications/page.tsx"
+      ]
+    },
+    {
+      "name": "User Profile & Settings",
+      "description": "User profile management, security settings, appearance settings, and notification preferences",
+      "files": [
+        "src/app/(dashboard)/profile/page.tsx",
+        "src/app/(dashboard)/settings/page.tsx",
+        "src/app/(dashboard)/settings/security/page.tsx",
+        "src/app/(dashboard)/settings/appearance/page.tsx",
+        "src/app/(dashboard)/settings/notifications/page.tsx"
+      ]
+    },
+    {
+      "name": "Public Pages",
+      "description": "Landing page, about, scholars directory, FAQ, contact, support, privacy, terms, and certificate verification",
+      "files": [
+        "src/app/page.tsx",
+        "src/app/about/page.tsx",
+        "src/app/scholars/page.tsx",
+        "src/app/faq/page.tsx",
+        "src/app/contact/page.tsx",
+        "src/app/support/page.tsx",
+        "src/app/privacy/page.tsx",
+        "src/app/terms/page.tsx",
+        "src/app/become-scholar/page.tsx"
+      ]
+    },
+    {
+      "name": "UI Component Library",
+      "description": "Comprehensive set of reusable UI components built on Radix UI primitives",
+      "files": [
+        "src/components/ui/button.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/input.tsx",
+        "src/components/ui/label.tsx",
+        "src/components/ui/textarea.tsx",
+        "src/components/ui/select.tsx",
+        "src/components/ui/checkbox.tsx",
+        "src/components/ui/switch.tsx",
+        "src/components/ui/dialog.tsx",
+        "src/components/ui/alert-dialog.tsx",
+        "src/components/ui/alert.tsx",
+        "src/components/ui/badge.tsx",
+        "src/components/ui/progress.tsx",
+        "src/components/ui/slider.tsx",
+        "src/components/ui/avatar.tsx",
+        "src/components/ui/dropdown-menu.tsx",
+        "src/components/ui/popover.tsx",
+        "src/components/ui/tabs.tsx",
+        "src/components/ui/separator.tsx",
+        "src/components/ui/scroll-area.tsx",
+        "src/components/ui/document-upload.tsx"
+      ]
+    },
+    {
+      "name": "Email Service",
+      "description": "Email notification service with templates for various system events",
+      "files": [
+        "src/lib/email-service.ts",
+        "src/lib/email-templates.ts"
+      ]
+    },
+    {
+      "name": "Custom Hooks",
+      "description": "Reusable React hooks for roles management and toast notifications",
+      "files": [
+        "src/hooks/use-roles.ts",
+        "src/hooks/use-toast.ts"
+      ]
+    },
+    {
+      "name": "Utility Functions",
+      "description": "Shared utility functions and helpers",
+      "files": [
+        "src/lib/utils.ts",
+        "src/types/supabase.ts"
+      ]
+    },
+    {
+      "name": "RTL Support",
+      "description": "Right-to-left layout support for Arabic language",
+      "files": [
+        "src/components/shared/rtl-provider.tsx",
+        "src/app/layout.tsx",
+        "src/app/globals.css"
+      ]
+    },
+    {
+      "name": "Shared Components",
+      "description": "Shared components like logo and layout providers",
+      "files": [
+        "src/components/shared/logo.tsx",
+        "src/components/shared/DashboardHeader.tsx"
+      ]
+    },
+    {
+      "name": "Portal Components",
+      "description": "Submission portal for students to submit applications",
+      "files": [
+        "src/components/portal/SubmissionForm.tsx",
+        "src/components/portal/SubmissionList.tsx"
+      ]
+    }
+  ]
+}
