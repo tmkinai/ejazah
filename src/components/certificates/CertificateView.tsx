@@ -451,6 +451,30 @@ export default function CertificateView({ certificateId, onBack }: CertificateVi
           right: 0;
           bottom: 0;
         }
+
+        @media print {
+          @page { size: A4 portrait; margin: 0; }
+          body * { visibility: hidden !important; }
+          #print-certificate, #print-certificate * { visibility: visible !important; }
+          #print-certificate {
+            position: fixed !important;
+            inset: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            background: white !important;
+            z-index: 99999 !important;
+          }
+          #print-certificate .A4-aspect {
+            padding-top: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            height: 100vh !important;
+          }
+          #print-certificate .A4-content {
+            position: relative !important;
+            height: 100% !important;
+          }
+        }
         
         .security-watermark {
           position: absolute;
@@ -575,7 +599,7 @@ export default function CertificateView({ certificateId, onBack }: CertificateVi
       </div>
 
       {/* Certificate */}
-      <div className="A4-aspect shadow-2xl w-full">
+      <div id="print-certificate" className="A4-aspect shadow-2xl w-full">
         <div 
           ref={certificateRef}
           className="A4-content bg-cover bg-center text-right flex flex-col p-8"

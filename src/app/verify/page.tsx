@@ -173,6 +173,22 @@ function VerifyPageContent() {
 
   return (
     <div className="min-h-screen bg-background">
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media print {
+          @page { size: A4 portrait; margin: 0; }
+          body * { visibility: hidden !important; }
+          #print-certificate, #print-certificate * { visibility: visible !important; }
+          #print-certificate {
+            position: fixed !important;
+            inset: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            background: white !important;
+            z-index: 99999 !important;
+            overflow: hidden !important;
+          }
+        }
+      `}} />
       {/* Header */}
       <header className="border-b border-border bg-white/80 backdrop-blur-lg sticky top-0 z-40">
         <div className="container py-4 flex items-center justify-between">
@@ -304,7 +320,7 @@ function VerifyPageContent() {
               </Card>
 
               {/* Certificate Template */}
-              <div className="max-w-5xl mx-auto">
+              <div id="print-certificate" className="max-w-5xl mx-auto">
                 <CertificateTemplate certificate={certificate} showQR={true} />
               </div>
 
