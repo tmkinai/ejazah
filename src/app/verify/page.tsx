@@ -232,8 +232,10 @@ function VerifyPageContent() {
               </div>
             </div>
 
-            {/* Full Certificate using CertificateView */}
-            <CertificateView certificateId={certificate.id} />
+            {/* Full Certificate using CertificateView — same wrapper as /certificates/[id] */}
+            <div className="container mx-auto p-6 max-w-5xl">
+              <CertificateView certificateId={certificate.id} />
+            </div>
 
             {/* Reset Action */}
             <div className="flex justify-center pb-8">

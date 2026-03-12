@@ -949,8 +949,8 @@ export default function CertificateView({ certificateId, onBack }: CertificateVi
 
       {/* Preview Dialog */}
       <Dialog open={showPreview} onOpenChange={setShowPreview}>
-        <DialogContent className="max-w-5xl w-full p-2" dir="rtl">
-          <DialogHeader className="px-4 pt-2 pb-1">
+        <DialogContent className="max-w-5xl w-full p-2 overflow-y-auto max-h-[90vh]" dir="rtl">
+          <DialogHeader className="px-4 pt-2 pb-1 sticky top-0 bg-white z-10 border-b">
             <DialogTitle className="text-right font-arabic">معاينة الشهادة</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-3">
