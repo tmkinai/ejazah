@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, Suspense, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,8 +8,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Logo, OrnamentalDivider } from '@/components/shared/logo'
-import { Loader2, Search, CheckCircle, XCircle, Shield } from 'lucide-react'
+import { Loader2, Search, CheckCircle, XCircle, Shield, Printer, Eye, Download } from 'lucide-react'
 import { CertificateTemplate } from '@/components/certificates/certificate-template'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import html2canvas from 'html2canvas'
 import Link from 'next/link'
 
 function VerifyPageContent() {
@@ -20,6 +22,93 @@ function VerifyPageContent() {
   const [searching, setSearching] = useState(false)
   const [certificate, setCertificate] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
+  const certRef = useRef<HTMLDivElement>(null)
+  const [isPrinting, setIsPrinting] = useState(false)
+  const [isGeneratingPreview, setIsGeneratingPreview] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
+  const [previewImage, setPreviewImage] = useState<string | null>(null)
+
+  const generateCertImage = async (): Promise<string | null> => {
+    if (!certRef.current) return null
+    await document.fonts.ready
+    await new Promise(resolve => setTimeout(resolve, 300))
+    const canvas = await html2canvas(certRef.current, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+    })
+    return canvas.toDataURL('image/png', 1.0)
+  }
+
+  const handlePrint = async () => {
+    setIsPrinting(true)
+    try {
+      const imgData = await generateCertImage()
+      if (!imgData) return
+      const printWindow = window.open('', '_blank')
+      if (printWindow) {
+        printWindow.document.write(`<!DOCTYPE html>
+          <html dir="rtl">
+            <head>
+              <title>طباعة الشهادة</title>
+              <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                @page { size: A4 portrait; margin: 0; }
+                body { margin: 0; padding: 0; background: white; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+                img { max-width: 100%; max-height: 100vh; object-fit: contain; display: block; }
+              </style>
+            </head>
+            <body>
+              <img src="${imgData}" />
+              <script>
+                window.onload = function() {
+                  setTimeout(function() { window.print(); window.close(); }, 600);
+                };
+              </script>
+            </body>
+          </html>`)
+        printWindow.document.close()
+      }
+    } catch (err) {
+      console.error('Print error:', err)
+    } finally {
+      setIsPrinting(false)
+    }
+  }
+
+  const handlePreview = async () => {
+    setIsGeneratingPreview(true)
+    try {
+      const imgData = await generateCertImage()
+      if (!imgData) return
+      setPreviewImage(imgData)
+      setShowPreview(true)
+    } catch (err) {
+      console.error('Preview error:', err)
+    } finally {
+      setIsGeneratingPreview(false)
+    }
+  }
+
+  const handleDownload = async () => {
+    setIsGeneratingPreview(true)
+    try {
+      const imgData = await generateCertImage()
+      if (!imgData) return
+      const link = document.createElement('a')
+      link.href = imgData
+      link.download = `شهادة-${certificate?.certificate_number || 'ejazah'}.png`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    } catch (err) {
+      console.error('Download error:', err)
+    } finally {
+      setIsGeneratingPreview(false)
+    }
+  }
 
   // Check for certificate parameter in URL and auto-verify
   useEffect(() => {
@@ -320,7 +409,7 @@ function VerifyPageContent() {
               </Card>
 
               {/* Certificate Template */}
-              <div id="print-certificate" className="max-w-5xl mx-auto">
+              <div id="print-certificate" ref={certRef} className="max-w-5xl mx-auto">
                 <CertificateTemplate certificate={certificate} showQR={true} />
               </div>
 
@@ -354,29 +443,75 @@ function VerifyPageContent() {
               </Card>
 
               {/* Action Buttons */}
-              <div className="flex justify-center gap-4 pb-8">
+              <div className="flex flex-wrap justify-center gap-3 pb-8">
                 <Button
                   variant="outline"
                   size="lg"
-                  onClick={() => {
-                    setCertificate(null)
-                    setCertificateNumber('')
-                    setError(null)
-                  }}
-                  className="min-w-[200px]"
+                  onClick={() => { setCertificate(null); setCertificateNumber(''); setError(null) }}
                 >
                   <Search className="w-5 h-5 ml-2" />
                   تحقق من شهادة أخرى
                 </Button>
                 <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={handlePreview}
+                  disabled={isGeneratingPreview}
+                >
+                  {isGeneratingPreview ? (
+                    <Loader2 className="w-5 h-5 animate-spin ml-2" />
+                  ) : (
+                    <Eye className="w-5 h-5 ml-2" />
+                  )}
+                  معاينة الشهادة
+                </Button>
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={handleDownload}
+                  disabled={isGeneratingPreview}
+                >
+                  <Download className="w-5 h-5 ml-2" />
+                  حفظ صورة
+                </Button>
+                <Button
                   variant="gold"
                   size="lg"
-                  onClick={() => window.print()}
-                  className="min-w-[200px]"
+                  onClick={handlePrint}
+                  disabled={isPrinting}
                 >
+                  {isPrinting ? (
+                    <Loader2 className="w-5 h-5 animate-spin ml-2" />
+                  ) : (
+                    <Printer className="w-5 h-5 ml-2" />
+                  )}
                   طباعة الشهادة
                 </Button>
               </div>
+
+              {/* Preview Dialog */}
+              <Dialog open={showPreview} onOpenChange={setShowPreview}>
+                <DialogContent className="max-w-4xl w-full p-2" dir="rtl">
+                  <DialogHeader className="px-4 pt-2 pb-1">
+                    <DialogTitle className="text-right font-arabic">معاينة الشهادة</DialogTitle>
+                  </DialogHeader>
+                  <div className="flex flex-col gap-3">
+                    {previewImage && (
+                      <img src={previewImage} alt="معاينة الشهادة" className="w-full rounded-lg shadow-lg" />
+                    )}
+                    <div className="flex gap-2 justify-center pb-2">
+                      <Button onClick={handlePrint} disabled={isPrinting} variant="gold" className="flex items-center gap-2">
+                        {isPrinting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer size={16} />}
+                        طباعة
+                      </Button>
+                      <Button onClick={handleDownload} disabled={isGeneratingPreview} variant="outline" className="flex items-center gap-2">
+                        <Download size={16} />
+                        حفظ صورة
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
           )}
 

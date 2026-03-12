@@ -3,7 +3,13 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { Download, Share2, Loader2, Printer, ArrowLeft } from 'lucide-react'
+import { Download, Share2, Loader2, Printer, ArrowLeft, Eye, X } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { format } from 'date-fns'
 import { ar } from 'date-fns/locale'
 import { QRCodeSVG } from 'qrcode.react'
@@ -23,6 +29,9 @@ export default function CertificateView({ certificateId, onBack }: CertificateVi
   const certificateRef = useRef<HTMLDivElement>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
+  const [previewImage, setPreviewImage] = useState<string | null>(null)
+  const [isPrinting, setIsPrinting] = useState(false)
 
   useEffect(() => {
     const checkMobile = () => {
@@ -282,6 +291,70 @@ export default function CertificateView({ certificateId, onBack }: CertificateVi
     } catch (error) {
       console.error('Error generating image:', error)
       alert('حدث خطأ أثناء إنشاء الصورة. الرجاء المحاولة مرة أخرى.')
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  const generateCertificateImage = async (): Promise<string | null> => {
+    if (!certificateRef.current) return null
+    await document.fonts.ready
+    await new Promise(resolve => setTimeout(resolve, 300))
+    const canvas = await html2canvas(certificateRef.current, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: bgColor,
+      logging: false,
+    })
+    return canvas.toDataURL('image/png', 1.0)
+  }
+
+  const handlePrint = async () => {
+    setIsPrinting(true)
+    try {
+      const imgData = await generateCertificateImage()
+      if (!imgData) return
+      const printWindow = window.open('', '_blank')
+      if (printWindow) {
+        printWindow.document.write(`<!DOCTYPE html>
+          <html dir="rtl">
+            <head>
+              <title>طباعة الشهادة - ${studentName}</title>
+              <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                @page { size: A4 landscape; margin: 0; }
+                body { margin: 0; padding: 0; background: white; display: flex; align-items: center; justify-content: center; height: 100vh; }
+                img { max-width: 100%; max-height: 100vh; object-fit: contain; display: block; }
+              </style>
+            </head>
+            <body>
+              <img src="${imgData}" />
+              <script>
+                window.onload = function() {
+                  setTimeout(function() { window.print(); window.close(); }, 600);
+                };
+              </script>
+            </body>
+          </html>`)
+        printWindow.document.close()
+      }
+    } catch (err) {
+      console.error('Print error:', err)
+    } finally {
+      setIsPrinting(false)
+    }
+  }
+
+  const handlePreview = async () => {
+    setIsGenerating(true)
+    try {
+      const imgData = await generateCertificateImage()
+      if (!imgData) return
+      setPreviewImage(imgData)
+      setShowPreview(true)
+    } catch (err) {
+      console.error('Preview error:', err)
     } finally {
       setIsGenerating(false)
     }
@@ -581,13 +654,30 @@ export default function CertificateView({ certificateId, onBack }: CertificateVi
         
         <Button
           variant="outline"
-          onClick={() => window.print()}
+          onClick={handlePrint}
+          disabled={isPrinting}
           className="flex items-center gap-2"
         >
-          <Printer size={16} />
-          طباعة
+          {isPrinting ? (
+            <><Loader2 className="w-4 h-4 animate-spin ml-1" />جاري التجهيز...</>
+          ) : (
+            <><Printer size={16} />طباعة</>
+          )}
         </Button>
-        
+
+        <Button
+          variant="outline"
+          onClick={handlePreview}
+          disabled={isGenerating}
+          className="flex items-center gap-2"
+        >
+          {isGenerating ? (
+            <><Loader2 className="w-4 h-4 animate-spin ml-1" />جاري المعاينة...</>
+          ) : (
+            <><Eye size={16} />معاينة</>
+          )}
+        </Button>
+
         <Button
           variant="outline"
           onClick={handleShare}
@@ -856,6 +946,44 @@ export default function CertificateView({ certificateId, onBack }: CertificateVi
           {verificationUrl}
         </a>
       </div>
+
+      {/* Preview Dialog */}
+      <Dialog open={showPreview} onOpenChange={setShowPreview}>
+        <DialogContent className="max-w-5xl w-full p-2" dir="rtl">
+          <DialogHeader className="px-4 pt-2 pb-1">
+            <DialogTitle className="text-right font-arabic">معاينة الشهادة</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            {previewImage && (
+              <img
+                src={previewImage}
+                alt="معاينة الشهادة"
+                className="w-full rounded-lg shadow-lg"
+              />
+            )}
+            <div className="flex gap-2 justify-center pb-2">
+              <Button
+                onClick={handlePrint}
+                disabled={isPrinting}
+                style={{ backgroundColor: primaryColor }}
+                className="flex items-center gap-2"
+              >
+                {isPrinting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer size={16} />}
+                طباعة
+              </Button>
+              <Button
+                onClick={downloadAsImage}
+                disabled={isGenerating}
+                variant="outline"
+                className="flex items-center gap-2"
+              >
+                <Download size={16} />
+                حفظ صورة
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
