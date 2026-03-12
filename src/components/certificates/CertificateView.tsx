@@ -33,6 +33,7 @@ export default function CertificateView({ certificateId, onBack }: CertificateVi
   const [previewImage, setPreviewImage] = useState<string | null>(null)
   const [isPrinting, setIsPrinting] = useState(false)
   const [certScale, setCertScale] = useState(1)
+  const [certContentHeight, setCertContentHeight] = useState(1123)
 
   const A4_WIDTH = 794
   const A4_HEIGHT = 1123
@@ -46,16 +47,23 @@ export default function CertificateView({ certificateId, onBack }: CertificateVi
   // Scale certificate to fit container on all screen sizes
   useEffect(() => {
     if (!certificate) return
-    const updateScale = () => {
+    const updateDimensions = () => {
       if (wrapperRef.current) {
         const w = wrapperRef.current.offsetWidth
         setCertScale(w / A4_WIDTH)
       }
+      if (certificateRef.current) {
+        // Measure actual rendered height (may exceed A4_HEIGHT with long content)
+        const h = certificateRef.current.scrollHeight
+        if (h > 0) setCertContentHeight(h)
+      }
     }
-    updateScale()
-    const observer = new ResizeObserver(updateScale)
+    // Initial measurement after render
+    const timer = setTimeout(updateDimensions, 100)
+    const observer = new ResizeObserver(updateDimensions)
     if (wrapperRef.current) observer.observe(wrapperRef.current)
-    return () => observer.disconnect()
+    if (certificateRef.current) observer.observe(certificateRef.current)
+    return () => { clearTimeout(timer); observer.disconnect() }
   }, [certificate])
 
   const fetchData = async () => {
@@ -602,14 +610,14 @@ export default function CertificateView({ certificateId, onBack }: CertificateVi
         id="print-certificate"
         ref={wrapperRef}
         className="cert-scale-wrapper shadow-2xl w-full"
-        style={{ height: `${A4_HEIGHT * certScale}px` }}
+        style={{ height: `${certContentHeight * certScale}px` }}
       >
         <div
           ref={certificateRef}
           className="cert-scale-inner bg-cover bg-center text-right flex flex-col p-8"
           style={{
             width: `${A4_WIDTH}px`,
-            height: `${A4_HEIGHT}px`,
+            minHeight: `${A4_HEIGHT}px`,
             transform: `scale(${certScale})`,
             backgroundImage: backgroundImage ? `url(${backgroundImage})` : 'none',
             backgroundColor: bgColor,
@@ -626,7 +634,7 @@ export default function CertificateView({ certificateId, onBack }: CertificateVi
           )}
           
           <div 
-            className="relative z-10 h-full bg-white/70 backdrop-blur-sm p-10 flex flex-col rounded-lg"
+            className="relative z-10 min-h-full bg-white/70 backdrop-blur-sm p-10 flex flex-col rounded-lg"
             style={getBorderStyle()}
           >
             {/* Security Watermark Pattern */}
