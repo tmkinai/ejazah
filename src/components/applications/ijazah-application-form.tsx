@@ -398,9 +398,14 @@ export function IjazahApplicationForm() {
             </div>
           ))}
         </div>
-        <div>
-          <h3 className="text-lg font-semibold">{STEPS[step].title}</h3>
-          <p className="text-sm text-muted-foreground">{STEPS[step].description}</p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h3 className="text-lg font-semibold">{STEPS[step].title}</h3>
+            <p className="text-sm text-muted-foreground">{STEPS[step].description}</p>
+          </div>
+          <span className="text-sm text-muted-foreground bg-muted px-3 py-1 rounded-full font-arabic whitespace-nowrap">
+            الخطوة {step + 1} من {STEPS.length}
+          </span>
         </div>
       </div>
 

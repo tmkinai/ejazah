@@ -60,17 +60,24 @@ export function Logo({
           backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Cpath fill='%23B8860B' fill-opacity='0.5' d='M20 0L40 20L20 40L0 20z M20 5L35 20L20 35L5 20z'/%3E%3C/svg%3E")`,
           backgroundSize: '20px 20px',
         }} />
-        {/* Arabic letter */}
-        <span className={`
-          font-arabic 
-          ${s.letter} 
-          font-bold 
-          text-gold-400
-          relative z-10
-          drop-shadow-sm
-        `}>
-          إ
-        </span>
+        {/* Quran / open-book icon */}
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          className={`relative z-10 drop-shadow-sm text-gold-400 ${size === 'sm' ? 'w-4 h-4' : size === 'lg' ? 'w-7 h-7' : 'w-5 h-5'}`}
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          {/* Open book */}
+          <path d="M12 6C10 4.5 7 4 4 4.5V19c3-.5 6 0 8 1.5" />
+          <path d="M12 6c2-1.5 5-2 8-1.5V19c-3-.5-6 0-8 1.5" />
+          <path d="M12 6v15.5" />
+          {/* Decorative lines (text lines on pages) */}
+          <path d="M6 8.5h4M6 11h3.5M6 13.5h4" strokeWidth="1" opacity="0.7" />
+          <path d="M14 8.5h4M14 11h3.5M14 13.5h4" strokeWidth="1" opacity="0.7" />
+        </svg>
       </div>
       
       {/* Logo Text */}
@@ -86,13 +93,14 @@ export function Logo({
             الإجازة
           </span>
           <span className={`
-            ${s.subtext} 
+            ${s.subtext}
             ${v.subtext}
-            tracking-wider
+            tracking-widest
             uppercase
-            font-medium
+            font-light
+            opacity-60
           `}>
-            Ejazah
+            EJAZAH
           </span>
         </div>
       )}

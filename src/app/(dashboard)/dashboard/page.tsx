@@ -374,12 +374,16 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             {applications.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground font-arabic">
-                <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>لا توجد طلبات بعد</p>
+              <div className="text-center py-10 font-arabic">
+                <div className="w-16 h-16 rounded-full bg-primary-50 flex items-center justify-center mx-auto mb-4">
+                  <FileText className="w-8 h-8 text-primary-400" />
+                </div>
+                <p className="font-semibold text-foreground mb-1">لم تقدّم أي طلب بعد</p>
+                <p className="text-sm text-muted-foreground mb-4">ابدأ رحلتك نحو الحصول على إجازة قرآنية موثقة</p>
                 <Link href="/applications/new">
-                  <Button variant="link" className="font-arabic mt-2">
-                    تقديم طلب جديد
+                  <Button size="sm" className="font-arabic">
+                    <PlusCircle className="w-4 h-4 ml-2" />
+                    تقديم طلب الآن
                   </Button>
                 </Link>
               </div>
@@ -431,10 +435,12 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             {certificates.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground font-arabic">
-                <Award className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>لا توجد شهادات بعد</p>
-                <p className="text-sm mt-2">ستظهر هنا بعد اعتماد طلبك</p>
+              <div className="text-center py-10 font-arabic">
+                <div className="w-16 h-16 rounded-full bg-gold-50 flex items-center justify-center mx-auto mb-4">
+                  <Award className="w-8 h-8 text-gold-400" />
+                </div>
+                <p className="font-semibold text-foreground mb-1">لا توجد شهادات بعد</p>
+                <p className="text-sm text-muted-foreground">ستظهر شهاداتك هنا بعد اعتماد طلبك من قِبَل الشيخ</p>
               </div>
             ) : (
               <div className="space-y-3">

@@ -117,7 +117,7 @@ function VerifyPageContent() {
       </header>
 
       {/* Hero Section */}
-      <div className="bg-gradient-to-b from-primary-900 to-primary-800 text-white py-16">
+      <div className="hero-bg text-white py-16 relative overflow-hidden">
         <div className="container text-center space-y-4">
           <div className="flex items-center gap-4 justify-center">
             <div className="w-16 h-16 rounded-2xl bg-gold-500/20 border border-gold-400/30 flex items-center justify-center">

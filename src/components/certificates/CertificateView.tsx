@@ -544,12 +544,8 @@ export default function CertificateView({ certificateId, onBack }: CertificateVi
 
       {/* Action Buttons — responsive for all screen sizes */}
       <div className="flex flex-wrap gap-2 sm:gap-3 justify-center items-center px-2">
-        {onBack && (
-          <Button onClick={onBack} variant="ghost">
-            <ArrowLeft className="w-4 h-4 ml-2" />
-            العودة
-          </Button>
-        )}
+        {/* Primary actions */}
+        <div className="flex flex-wrap gap-2 sm:gap-3 items-center justify-center">
         <Button
           onClick={downloadAsImage}
           className="flex items-center gap-2"
@@ -603,6 +599,17 @@ export default function CertificateView({ certificateId, onBack }: CertificateVi
           <Share2 size={16} />
           مشاركة
         </Button>
+        </div>
+        {/* Back button — separated with a divider */}
+        {onBack && (
+          <>
+            <div className="w-px h-8 bg-border hidden sm:block" />
+            <Button onClick={onBack} variant="ghost" className="text-muted-foreground hover:text-foreground">
+              <ArrowLeft className="w-4 h-4 ml-2" />
+              العودة
+            </Button>
+          </>
+        )}
       </div>
 
       {/* Certificate — scales proportionally to fit any screen */}

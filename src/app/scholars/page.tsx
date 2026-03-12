@@ -128,25 +128,27 @@ export default function ScholarsPage() {
 
       {/* Main Content */}
       <main className="container py-12">
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-6 max-w-3xl mx-auto mb-12">
-          <div className="text-center">
-            <div className="text-4xl font-bold text-primary-900 mb-2">{scholars.length}</div>
-            <div className="text-sm text-muted-foreground">شيخ معتمد</div>
-          </div>
-          <div className="text-center border-x border-border">
-            <div className="text-4xl font-bold text-gold-600 mb-2">
-              {scholars.reduce((sum, s) => sum + (s.certificates_issued || 0), 0)}
+        {/* Stats — only shown when there is real data */}
+        {scholars.length > 0 && (
+          <div className="grid grid-cols-3 gap-6 max-w-3xl mx-auto mb-12">
+            <div className="text-center">
+              <div className="text-4xl font-bold text-primary-900 mb-2">{scholars.length}</div>
+              <div className="text-sm text-muted-foreground">شيخ معتمد</div>
             </div>
-            <div className="text-sm text-muted-foreground">إجازة صادرة</div>
-          </div>
-          <div className="text-center">
-            <div className="text-4xl font-bold text-primary-900 mb-2">
-              {new Set(scholars.map(s => s.country)).size}
+            <div className="text-center border-x border-border">
+              <div className="text-4xl font-bold text-gold-600 mb-2">
+                {scholars.reduce((sum, s) => sum + (s.certificates_issued || 0), 0)}
+              </div>
+              <div className="text-sm text-muted-foreground">إجازة صادرة</div>
             </div>
-            <div className="text-sm text-muted-foreground">دولة</div>
+            <div className="text-center">
+              <div className="text-4xl font-bold text-primary-900 mb-2">
+                {new Set(scholars.map(s => s.country)).size}
+              </div>
+              <div className="text-sm text-muted-foreground">دولة</div>
+            </div>
           </div>
-        </div>
+        )}
 
         <OrnamentalDivider className="mb-12" />
 
