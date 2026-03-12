@@ -3,12 +3,13 @@ import { IBM_Plex_Sans_Arabic, Amiri } from 'next/font/google'
 import { RTLProvider } from '@/components/shared/rtl-provider'
 import './globals.css'
 
-// Primary font for UI
+// Primary font for UI — load both arabic + latin so Latin text also uses IBM Plex
 const ibmPlexSansArabic = IBM_Plex_Sans_Arabic({
-  subsets: ['arabic'],
-  weight: ['400', '500', '600', '700'],
+  subsets: ['arabic', 'latin'],
+  weight: ['300', '400', '500', '600', '700'],
   variable: '--font-ibm-plex',
   display: 'swap',
+  preload: true,
 })
 
 // Display font for headings and decorative text

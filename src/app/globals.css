@@ -50,6 +50,16 @@
     text-align: right;
   }
 
+  /* Pseudo-elements */
+  *::before, *::after {
+    font-family: var(--font-ibm-plex), 'IBM Plex Sans Arabic', system-ui, sans-serif;
+  }
+
+  /* SVG text elements don't inherit font-family by default */
+  svg text, svg tspan, svg foreignObject {
+    font-family: var(--font-ibm-plex), 'IBM Plex Sans Arabic', system-ui, sans-serif;
+  }
+
   /* All elements use the same font (IBM Plex Sans Arabic) */
   .font-arabic, h1.font-arabic, h2.font-arabic, h3.font-arabic {
     font-family: var(--font-ibm-plex), 'IBM Plex Sans Arabic', system-ui, sans-serif;
