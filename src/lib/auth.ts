@@ -6,11 +6,13 @@ import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  debug: process.env.NODE_ENV !== 'production',
   adapter: PrismaAdapter(prisma),
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      allowDangerousEmailAccountLinking: true,
     }),
     Credentials({
       name: 'credentials',
@@ -44,50 +46,45 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   session: {
-    strategy: 'jwt',
+    strategy: 'database',
   },
   pages: {
     signIn: '/auth/login',
     newUser: '/dashboard',
   },
   callbacks: {
-    async jwt({ token, user, trigger }) {
-      if (user) {
-        token.id = user.id
-      }
-      // Refresh roles on every token refresh
-      if (token.id) {
+    async session({ session, user }) {
+      if (session.user) {
+        session.user.id = user.id
+        // Fetch roles from profile
         const profile = await prisma.profile.findUnique({
-          where: { id: token.id as string },
+          where: { id: user.id },
           select: { roles: true },
         })
-        token.roles = profile?.roles ?? ['student']
-      }
-      return token
-    },
-    async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id as string
-        ;(session.user as any).roles = token.roles
+        ;(session.user as any).roles = profile?.roles ?? ['student']
       }
       return session
     },
     async signIn({ user, account }) {
       // For OAuth users, ensure a profile exists
       if (account?.provider !== 'credentials' && user.id) {
-        const existing = await prisma.profile.findUnique({
-          where: { id: user.id },
-        })
-        if (!existing) {
-          await prisma.profile.create({
-            data: {
-              id: user.id,
-              fullName: user.name,
-              email: user.email || '',
-              avatarUrl: user.image,
-              roles: JSON.stringify(['student']),
-            },
+        try {
+          const existing = await prisma.profile.findUnique({
+            where: { id: user.id },
           })
+          if (!existing) {
+            await prisma.profile.create({
+              data: {
+                id: user.id,
+                fullName: user.name,
+                email: user.email || '',
+                avatarUrl: user.image,
+                roles: JSON.stringify(['student']),
+              },
+            })
+          }
+        } catch (e) {
+          console.error('Error creating profile during signIn:', e)
         }
       }
       return true
@@ -95,21 +92,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   events: {
     async createUser({ user }) {
-      // Create profile for newly registered users
       if (user.id && user.email) {
-        const existing = await prisma.profile.findUnique({
-          where: { id: user.id },
-        })
-        if (!existing) {
-          await prisma.profile.create({
-            data: {
-              id: user.id,
-              fullName: user.name,
-              email: user.email,
-              avatarUrl: user.image,
-              roles: JSON.stringify(['student']),
-            },
+        try {
+          const existing = await prisma.profile.findUnique({
+            where: { id: user.id },
           })
+          if (!existing) {
+            await prisma.profile.create({
+              data: {
+                id: user.id,
+                fullName: user.name,
+                email: user.email,
+                avatarUrl: user.image,
+                roles: JSON.stringify(['student']),
+              },
+            })
+          }
+        } catch (e) {
+          console.error('Error creating profile during createUser:', e)
         }
       }
     },
