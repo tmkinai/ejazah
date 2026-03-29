@@ -1,14 +1,27 @@
 import NextAuth from 'next-auth'
+import type { NextAuthConfig } from 'next-auth'
 import Google from 'next-auth/providers/google'
 import Credentials from 'next-auth/providers/credentials'
 import { PrismaAdapter } from '@auth/prisma-adapter'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
+import { writeFileSync } from 'fs'
+
+function logError(label: string, error: any) {
+  const msg = `[${new Date().toISOString()}] ${label}: ${error?.message || error}\n${error?.stack || ''}\n`
+  try { writeFileSync('/tmp/authjs-error.log', msg, { flag: 'a' }) } catch {}
+  console.error(msg)
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   debug: true,
   trustHost: true,
   adapter: PrismaAdapter(prisma),
+  logger: {
+    error(error) { logError('AUTH_ERROR', error) },
+    warn(code) { logError('AUTH_WARN', code) },
+    debug(message, metadata) { logError('AUTH_DEBUG', `${message} ${JSON.stringify(metadata)}`) },
+  },
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,
