@@ -6,7 +6,8 @@ import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  debug: process.env.NODE_ENV !== 'production',
+  debug: true,
+  trustHost: true,
   adapter: PrismaAdapter(prisma),
   providers: [
     Google({
@@ -46,27 +47,38 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   session: {
-    strategy: 'database',
+    strategy: 'jwt',
   },
   pages: {
     signIn: '/auth/login',
     newUser: '/dashboard',
   },
   callbacks: {
-    async session({ session, user }) {
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id
+      }
+      if (token.id) {
+        try {
+          const profile = await prisma.profile.findUnique({
+            where: { id: token.id as string },
+            select: { roles: true },
+          })
+          token.roles = profile?.roles ?? ['student']
+        } catch {
+          token.roles = ['student']
+        }
+      }
+      return token
+    },
+    async session({ session, token }) {
       if (session.user) {
-        session.user.id = user.id
-        // Fetch roles from profile
-        const profile = await prisma.profile.findUnique({
-          where: { id: user.id },
-          select: { roles: true },
-        })
-        ;(session.user as any).roles = profile?.roles ?? ['student']
+        session.user.id = token.id as string
+        ;(session.user as any).roles = token.roles
       }
       return session
     },
     async signIn({ user, account }) {
-      // For OAuth users, ensure a profile exists
       if (account?.provider !== 'credentials' && user.id) {
         try {
           const existing = await prisma.profile.findUnique({
