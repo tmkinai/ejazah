@@ -1,26 +1,115 @@
 import NextAuth from 'next-auth'
-import type { NextAuthConfig } from 'next-auth'
 import Google from 'next-auth/providers/google'
 import Credentials from 'next-auth/providers/credentials'
-import { PrismaAdapter } from '@auth/prisma-adapter'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { writeFileSync } from 'fs'
+import type { Adapter } from 'next-auth/adapters'
 
-function logError(label: string, error: any) {
-  const msg = `[${new Date().toISOString()}] ${label}: ${error?.message || error}\n${error?.stack || ''}\n`
+function log(label: string, data: any) {
+  const msg = `[${new Date().toISOString()}] ${label}: ${typeof data === 'string' ? data : JSON.stringify(data, null, 2)}\n`
   try { writeFileSync('/tmp/authjs-error.log', msg, { flag: 'a' }) } catch {}
-  console.error(msg)
+}
+
+// Custom adapter that logs every operation and its errors
+function CustomPrismaAdapter(): Adapter {
+  return {
+    async createUser(data) {
+      log('ADAPTER_createUser', data)
+      try {
+        const user = await prisma.user.create({ data: { name: data.name, email: data.email!, image: data.image, emailVerified: data.emailVerified } })
+        log('ADAPTER_createUser_OK', user)
+        return user as any
+      } catch (e: any) { log('ADAPTER_createUser_ERROR', e.message); throw e }
+    },
+    async getUser(id) {
+      const user = await prisma.user.findUnique({ where: { id } })
+      return user as any
+    },
+    async getUserByEmail(email) {
+      const user = await prisma.user.findUnique({ where: { email } })
+      return user as any
+    },
+    async getUserByAccount({ providerAccountId, provider }) {
+      log('ADAPTER_getUserByAccount', { provider, providerAccountId })
+      try {
+        const account = await prisma.account.findUnique({
+          where: { provider_providerAccountId: { provider, providerAccountId } },
+          select: { user: true },
+        })
+        log('ADAPTER_getUserByAccount_OK', account?.user || null)
+        return (account?.user ?? null) as any
+      } catch (e: any) { log('ADAPTER_getUserByAccount_ERROR', e.message); throw e }
+    },
+    async updateUser(data) {
+      const user = await prisma.user.update({ where: { id: data.id }, data })
+      return user as any
+    },
+    async deleteUser(userId) {
+      await prisma.user.delete({ where: { id: userId } })
+    },
+    async linkAccount(data) {
+      log('ADAPTER_linkAccount', Object.keys(data))
+      try {
+        // Only pass fields that exist in our schema
+        const account = await prisma.account.create({
+          data: {
+            userId: data.userId,
+            type: data.type,
+            provider: data.provider,
+            providerAccountId: data.providerAccountId,
+            refresh_token: data.refresh_token,
+            access_token: data.access_token,
+            expires_at: data.expires_at,
+            expires_in: (data as any).expires_in,
+            token_type: data.token_type,
+            scope: data.scope as string | undefined,
+            id_token: data.id_token as string | undefined,
+            session_state: data.session_state as string | undefined,
+          },
+        })
+        log('ADAPTER_linkAccount_OK', account.id)
+        return account as any
+      } catch (e: any) { log('ADAPTER_linkAccount_ERROR', e.message); throw e }
+    },
+    async unlinkAccount({ providerAccountId, provider }) {
+      await prisma.account.delete({ where: { provider_providerAccountId: { provider, providerAccountId } } })
+    },
+    async createSession(data) {
+      const session = await prisma.session.create({ data })
+      return session as any
+    },
+    async getSessionAndUser(sessionToken) {
+      const session = await prisma.session.findUnique({ where: { sessionToken }, include: { user: true } })
+      if (!session) return null
+      return { session, user: session.user } as any
+    },
+    async updateSession(data) {
+      const session = await prisma.session.update({ where: { sessionToken: data.sessionToken }, data })
+      return session as any
+    },
+    async deleteSession(sessionToken) {
+      await prisma.session.delete({ where: { sessionToken } })
+    },
+    async createVerificationToken(data) {
+      const token = await prisma.verificationToken.create({ data })
+      return token as any
+    },
+    async useVerificationToken({ identifier, token }) {
+      const vt = await prisma.verificationToken.delete({ where: { identifier_token: { identifier, token } } })
+      return vt as any
+    },
+  }
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   debug: true,
   trustHost: true,
-  adapter: PrismaAdapter(prisma),
+  adapter: CustomPrismaAdapter(),
   logger: {
-    error(error) { logError('AUTH_ERROR', error) },
-    warn(code) { logError('AUTH_WARN', code) },
-    debug(message, metadata) { logError('AUTH_DEBUG', `${message} ${JSON.stringify(metadata)}`) },
+    error(error) { log('AUTH_ERROR', error?.message || error) },
+    warn(code) { log('AUTH_WARN', code) },
+    debug(message, metadata) { log('AUTH_DEBUG', `${message} ${JSON.stringify(metadata)}`) },
   },
   providers: [
     Google({
@@ -36,51 +125,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null
-
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email as string },
-        })
-
+        const user = await prisma.user.findUnique({ where: { email: credentials.email as string } })
         if (!user || !user.hashedPassword) return null
-
-        const isValid = await bcrypt.compare(
-          credentials.password as string,
-          user.hashedPassword
-        )
-
+        const isValid = await bcrypt.compare(credentials.password as string, user.hashedPassword)
         if (!isValid) return null
-
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          image: user.image,
-        }
+        return { id: user.id, email: user.email, name: user.name, image: user.image }
       },
     }),
   ],
-  session: {
-    strategy: 'jwt',
-  },
-  pages: {
-    signIn: '/auth/login',
-    newUser: '/dashboard',
-  },
+  session: { strategy: 'jwt' },
+  pages: { signIn: '/auth/login', newUser: '/dashboard' },
   callbacks: {
     async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id
-      }
+      if (user) token.id = user.id
       if (token.id) {
         try {
-          const profile = await prisma.profile.findUnique({
-            where: { id: token.id as string },
-            select: { roles: true },
-          })
+          const profile = await prisma.profile.findUnique({ where: { id: token.id as string }, select: { roles: true } })
           token.roles = profile?.roles ?? ['student']
-        } catch {
-          token.roles = ['student']
-        }
+        } catch { token.roles = ['student'] }
       }
       return token
     },
@@ -94,23 +156,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async signIn({ user, account }) {
       if (account?.provider !== 'credentials' && user.id) {
         try {
-          const existing = await prisma.profile.findUnique({
-            where: { id: user.id },
-          })
+          const existing = await prisma.profile.findUnique({ where: { id: user.id } })
           if (!existing) {
             await prisma.profile.create({
-              data: {
-                id: user.id,
-                fullName: user.name,
-                email: user.email || '',
-                avatarUrl: user.image,
-                roles: JSON.stringify(['student']),
-              },
+              data: { id: user.id, fullName: user.name, email: user.email || '', avatarUrl: user.image, roles: JSON.stringify(['student']) },
             })
           }
-        } catch (e) {
-          console.error('Error creating profile during signIn:', e)
-        }
+        } catch (e: any) { log('PROFILE_CREATE_ERROR', e.message) }
       }
       return true
     },
@@ -119,23 +171,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async createUser({ user }) {
       if (user.id && user.email) {
         try {
-          const existing = await prisma.profile.findUnique({
-            where: { id: user.id },
-          })
+          const existing = await prisma.profile.findUnique({ where: { id: user.id } })
           if (!existing) {
             await prisma.profile.create({
-              data: {
-                id: user.id,
-                fullName: user.name,
-                email: user.email,
-                avatarUrl: user.image,
-                roles: JSON.stringify(['student']),
-              },
+              data: { id: user.id, fullName: user.name, email: user.email, avatarUrl: user.image, roles: JSON.stringify(['student']) },
             })
           }
-        } catch (e) {
-          console.error('Error creating profile during createUser:', e)
-        }
+        } catch (e: any) { log('PROFILE_CREATE_EVENT_ERROR', e.message) }
       }
     },
   },
