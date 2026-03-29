@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -21,24 +21,25 @@ interface ScholarSidebarProps {
 
 export default function ScholarSidebar({ className }: ScholarSidebarProps) {
   const pathname = usePathname()
-  const supabase = createClient()
+  const { data: session } = useSession()
   const [pendingCount, setPendingCount] = useState(0)
 
   useEffect(() => {
-    loadPendingCount()
-  }, [])
+    if (session?.user) {
+      loadPendingCount()
+    }
+  }, [session?.user])
 
   const loadPendingCount = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      const res = await fetch('/api/admin/requests')
+      if (!res.ok) throw new Error('Failed to load requests')
+      const data = await res.json()
 
-      const { count } = await supabase
-        .from('ijazah_applications')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'submitted')
-
-      setPendingCount(count || 0)
+      const pending = Array.isArray(data)
+        ? data.filter((r: any) => r.status === 'submitted').length
+        : 0
+      setPendingCount(pending)
     } catch (error) {
       console.error('Error loading pending count:', error)
     }

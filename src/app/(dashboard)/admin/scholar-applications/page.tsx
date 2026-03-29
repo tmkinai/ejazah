@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -29,7 +29,7 @@ interface ScholarApplication {
 
 export default function ScholarApplicationsPage() {
   const router = useRouter()
-  const supabase = createClient()
+  const { data: session, status: sessionStatus } = useSession()
   const [applications, setApplications] = useState<ScholarApplication[]>([])
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -40,23 +40,20 @@ export default function ScholarApplicationsPage() {
   })
 
   useEffect(() => {
+    if (sessionStatus === 'loading') return
+    if (!session?.user) {
+      router.push('/auth/login')
+      return
+    }
     loadApplications()
-  }, [])
+  }, [sessionStatus, session])
 
   const loadApplications = async () => {
     try {
       // Check if user is admin
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.push('/auth/login')
-        return
-      }
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('roles')
-        .eq('id', user.id)
-        .single()
+      const profileRes = await fetch('/api/profiles')
+      const profileResult = await profileRes.json()
+      const profile = profileResult.data
 
       if (!profile?.roles?.includes('admin')) {
         router.push('/dashboard')
@@ -66,45 +63,29 @@ export default function ScholarApplicationsPage() {
       setIsAdmin(true)
 
       // Fetch all scholar applications
-      const { data: applicationsData, error } = await supabase
-        .from('scholar_applications')
-        .select(`
-          id,
-          status,
-          specialization,
-          bio,
-          credentials,
-          sanad_chain,
-          documents,
-          submitted_at,
-          reviewer_notes,
-          profiles:user_id (
-            full_name,
-            email,
-            phone_number
-          )
-        `)
-        .order('submitted_at', { ascending: false })
+      const res = await fetch('/api/scholar-applications')
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error)
 
-      if (error) throw error
+      const applicationsData = result.data || []
 
       // Transform data
-      const transformed = applicationsData?.map((app: any) => ({
+      const transformed = applicationsData.map((app: any) => ({
         id: app.id,
         status: app.status,
         specialization: app.specialization,
         bio: app.bio,
         credentials: app.credentials,
-        sanad_chain: app.sanad_chain,
+        sanad_chain: app.sanad_chain || app.sanadChain,
         documents: app.documents || [],
-        submitted_at: app.submitted_at,
-        reviewer_notes: app.reviewer_notes,
+        submitted_at: app.submitted_at || app.submittedAt,
+        reviewer_notes: app.reviewer_notes || app.reviewerNotes,
         user: {
-          full_name: app.profiles?.full_name || 'Unknown',
-          email: app.profiles?.email || '',
-          phone_number: app.profiles?.phone_number,
+          full_name: app.user?.full_name || app.profiles?.full_name || 'Unknown',
+          email: app.user?.email || app.profiles?.email || '',
+          phone_number: app.user?.phone_number || app.profiles?.phone_number,
         },
-      })) || []
+      }))
 
       setApplications(transformed)
 

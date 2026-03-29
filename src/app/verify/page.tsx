@@ -2,7 +2,6 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,7 +13,6 @@ import Link from 'next/link'
 
 function VerifyPageContent() {
   const searchParams = useSearchParams()
-  const supabase = createClient()
   const [certificateNumber, setCertificateNumber] = useState('')
   const [searching, setSearching] = useState(false)
   const [certificate, setCertificate] = useState<any>(null)
@@ -40,46 +38,15 @@ function VerifyPageContent() {
     setCertificate(null)
 
     try {
-      const { data, error: fetchError } = await supabase
-        .from('ijazah_certificates')
-        .select(`
-          id,
-          certificate_number,
-          ijazah_type,
-          status,
-          issue_date,
-          verification_count,
-          last_verified_at
-        `)
-        .eq('certificate_number', certNumber.trim().toUpperCase())
-        .single()
+      const res = await fetch(`/api/verify?number=${encodeURIComponent(certNumber.trim().toUpperCase())}`)
+      const data = await res.json()
 
-      if (fetchError || !data) {
+      if (!res.ok || !data || data.error) {
         setError('الشهادة غير موجودة. يرجى التحقق من رقم الشهادة')
-
-        await supabase.from('verification_logs').insert({
-          verifier_ip: 'unknown',
-          verifier_user_agent: navigator.userAgent,
-          verification_method: 'certificate_number',
-          success: false,
-          failure_reason: 'Certificate not found',
-        })
         return
       }
 
       setCertificate(data)
-
-      await supabase.from('verification_logs').insert({
-        certificate_id: data.id,
-        verifier_ip: 'unknown',
-        verifier_user_agent: navigator.userAgent,
-        verification_method: 'certificate_number',
-        success: true,
-      })
-
-      await supabase.rpc('increment_certificate_verification', {
-        cert_id: data.id,
-      })
     } catch (err: any) {
       console.error('Error verifying certificate:', err)
       setError('حدث خطأ أثناء التحقق من الشهادة')

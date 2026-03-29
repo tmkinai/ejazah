@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -76,8 +76,8 @@ const toHijriDate = (gregorianDate: string): string => {
 function CreateIjazahPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const supabase = createClient()
-  
+  const { data: session } = useSession()
+
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [applications, setApplications] = useState<any[]>([])
@@ -127,13 +127,12 @@ function CreateIjazahPageContent() {
   }, [formData.issue_date])
 
   const loadData = async () => {
+    let settingsData: any = null
     try {
       // Load settings
-      const { data: settingsData } = await supabase
-        .from('app_settings')
-        .select('*')
-        .limit(1)
-        .single()
+      const settingsRes = await fetch('/api/admin/settings')
+      const settingsResult = await settingsRes.json()
+      settingsData = settingsResult.data
 
       if (settingsData) {
         setSettings(settingsData)
@@ -148,30 +147,14 @@ function CreateIjazahPageContent() {
       }
 
       // Load approved applications
-      const { data: apps, error: appsError } = await supabase
-        .from('ijazah_applications')
-        .select(`
-          *,
-          profiles!ijazah_applications_user_id_fkey (
-            full_name,
-            email
-          )
-        `)
-        .eq('status', 'approved')
-        .order('created_at', { ascending: false })
-
-      if (appsError) throw appsError
-      setApplications(apps || [])
+      const appsRes = await fetch('/api/admin/requests?status=approved')
+      const appsResult = await appsRes.json()
+      setApplications(appsResult.data || [])
 
       // Load narration types
-      const { data: narrations, error: narrError } = await supabase
-        .from('narration_types')
-        .select('*')
-        .eq('active', true)
-        .order('display_order')
-
-      if (narrError) throw narrError
-      setNarrationTypes(narrations || [])
+      const narrRes = await fetch('/api/admin/settings?section=narrations&active=true')
+      const narrResult = await narrRes.json()
+      setNarrationTypes(narrResult.data || [])
 
       // Pre-fill from URL params if coming from request
       const studentName = searchParams.get('studentName')
@@ -209,27 +192,26 @@ function CreateIjazahPageContent() {
   const generateIjazahNumber = useCallback(async () => {
     setIsGeneratingNumber(true)
     try {
-      const { data: allIjazat } = await supabase
-        .from('ijazah_certificates')
-        .select('certificate_number')
-        .order('created_at', { ascending: false })
+      const res = await fetch('/api/admin/certificates')
+      const result = await res.json()
+      const allIjazat = result.data || []
 
-      const validNumbers = (allIjazat || [])
-        .map((ijazah: any) => ijazah.certificate_number)
+      const validNumbers = allIjazat
+        .map((ijazah: any) => ijazah.certificate_number || ijazah.certificateNumber)
         .filter((num: string) => num && /^GH-\d{8}$/.test(num))
         .map((num: string) => parseInt(num.split('-')[1]))
 
       const maxNumber = validNumbers.length > 0 ? Math.max(...validNumbers) : 0
       const nextNumber = (maxNumber + 1).toString().padStart(8, '0')
       const newIjazahNumber = `GH-${nextNumber}`
-      
+
       setFormData(prev => ({ ...prev, ijazah_number: newIjazahNumber }))
     } catch (error) {
       console.error("Error generating ijazah number:", error)
     } finally {
       setIsGeneratingNumber(false)
     }
-  }, [supabase])
+  }, [])
 
   useEffect(() => {
     // Generate ijazah number on load if not set
@@ -290,14 +272,15 @@ function CreateIjazahPageContent() {
       const certificateNumber = formData.ijazah_number || serialCode
 
       // Get application for user_id and scholar_id
-      const application = formData.application_id 
+      const application = formData.application_id
         ? applications.find((a) => a.id === formData.application_id)
         : null
 
-      // Create certificate
-      const { data, error: insertError } = await supabase
-        .from('ijazah_certificates')
-        .insert({
+      // Create certificate via API
+      const res = await fetch('/api/admin/certificates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           user_id: application?.user_id || null,
           application_id: formData.application_id || null,
           certificate_number: certificateNumber,
@@ -309,7 +292,6 @@ function CreateIjazahPageContent() {
           is_verified: true,
           verification_hash: fingerprint,
           metadata: {
-            // Store all ijazah data in metadata
             student_name: formData.student_name,
             student_email: formData.student_email,
             student_information: formData.student_information,
@@ -325,32 +307,20 @@ function CreateIjazahPageContent() {
             digital_fingerprint: fingerprint,
             serial_code: serialCode,
           },
-        })
-        .select()
-        .single()
+        }),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Failed to create certificate')
 
-      if (insertError) throw insertError
+      const data = result.data
 
       // Update application status to completed if linked
       if (formData.application_id) {
-        await supabase
-          .from('ijazah_applications')
-          .update({ status: 'completed' })
-          .eq('id', formData.application_id)
-      }
-
-      // Update student's ijazat count
-      if (formData.student_email) {
-        const { data: students } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('email', formData.student_email)
-          .single()
-
-        if (students) {
-          // This is a simple increment - in production you might use a counter table or RPC
-          console.log('Student profile found:', students.id)
-        }
+        await fetch('/api/admin/requests', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: formData.application_id, status: 'completed' }),
+        })
       }
 
       setSuccess(true)

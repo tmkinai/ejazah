@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { IBM_Plex_Sans_Arabic, Amiri } from 'next/font/google'
 import { RTLProvider } from '@/components/shared/rtl-provider'
+import { SessionProvider } from '@/components/shared/session-provider'
 import './globals.css'
 
 // Primary font for UI — load both arabic + latin so Latin text also uses IBM Plex
@@ -41,9 +42,11 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.ico" />
       </head>
       <body className={`${ibmPlexSansArabic.className} antialiased`}>
-        <RTLProvider defaultRTL={true}>
-          {children}
-        </RTLProvider>
+        <SessionProvider>
+          <RTLProvider defaultRTL={true}>
+            {children}
+          </RTLProvider>
+        </SessionProvider>
       </body>
     </html>
   )

@@ -5,7 +5,7 @@ const config = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'cvzauvdhvjfpcbzoelkg.supabase.co',
+        hostname: 'lh3.googleusercontent.com', // Google profile pictures
       },
     ],
   },

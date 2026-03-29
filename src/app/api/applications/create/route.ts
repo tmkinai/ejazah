@@ -1,32 +1,17 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { auth } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient()
-
-    // Get authenticated user
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const body = await request.json()
-    const {
-      ijazahType,
-      personalInfo,
-      academicBackground,
-      quranExperience,
-    } = body
+    const { ijazahType, personalInfo, academicBackground, quranExperience } = body
 
-    // Validate required fields
     if (!ijazahType?.ijazahType || !personalInfo || !academicBackground || !quranExperience) {
       return NextResponse.json(
         { error: 'بيانات ناقصة. يرجى ملء جميع الحقول المطلوبة.' },
@@ -34,41 +19,29 @@ export async function POST(request: Request) {
       )
     }
 
-    // Generate application number
     const applicationNumber = `IJZ-${Date.now()}-${Math.random()
       .toString(36)
       .substring(2, 8)
       .toUpperCase()}`
 
-    // Create application in database
-    const { data: application, error: dbError } = await supabase
-      .from('ijazah_applications')
-      .insert({
-        user_id: user.id,
-        application_number: applicationNumber,
-        ijazah_type: ijazahType.ijazahType,
+    const application = await prisma.ijazahApplication.create({
+      data: {
+        userId: session.user.id,
+        applicationNumber,
+        ijazahType: ijazahType.ijazahType,
         status: 'submitted',
-        personal_info: personalInfo,
-        academic_background: academicBackground,
-        quran_experience: quranExperience,
-        submitted_at: new Date().toISOString(),
-      })
-      .select()
-      .single()
-
-    if (dbError) {
-      console.error('Database error:', dbError)
-      return NextResponse.json(
-        { error: 'فشل في حفظ الطلب. يرجى المحاولة لاحقاً.' },
-        { status: 500 }
-      )
-    }
+        personalInfo,
+        academicBackground,
+        quranExperience,
+        submittedAt: new Date(),
+      },
+    })
 
     return NextResponse.json(
       {
         success: true,
         applicationId: application.id,
-        applicationNumber: application.application_number,
+        applicationNumber: application.applicationNumber,
       },
       { status: 201 }
     )

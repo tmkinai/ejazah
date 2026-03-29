@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -23,48 +23,35 @@ interface Application {
 }
 
 export default function ScholarApplicationsPage() {
-  const supabase = createClient()
+  const { data: session, status: sessionStatus } = useSession()
   const [loading, setLoading] = useState(true)
   const [applications, setApplications] = useState<Application[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
 
   useEffect(() => {
+    if (sessionStatus === 'loading') return
+    if (!session) return
     loadApplications()
-  }, [])
+  }, [session, sessionStatus])
 
   const loadApplications = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      const res = await fetch('/api/scholar-applications')
+      if (!res.ok) return
+      const applicationsData = await res.json()
 
-      const { data: applicationsData } = await supabase
-        .from('ijazah_applications')
-        .select(`
-          id,
-          application_number,
-          ijazah_type,
-          status,
-          submitted_at,
-          profiles:user_id (
-            full_name,
-            email
-          )
-        `)
-        .in('status', ['submitted', 'under_review', 'interview_scheduled', 'approved', 'rejected'])
-        .order('submitted_at', { ascending: false })
-
-      const transformed = applicationsData?.map((app: any) => ({
+      const transformed = (applicationsData || []).map((app: any) => ({
         id: app.id,
-        application_number: app.application_number,
-        ijazah_type: app.ijazah_type,
+        application_number: app.application_number || app.applicationNumber,
+        ijazah_type: app.ijazah_type || app.ijazahType,
         status: app.status,
-        submitted_at: app.submitted_at,
+        submitted_at: app.submitted_at || app.submittedAt,
         user: {
-          full_name: app.profiles?.full_name || 'Unknown',
-          email: app.profiles?.email || '',
+          full_name: app.user?.full_name || app.user?.fullName || 'Unknown',
+          email: app.user?.email || '',
         },
-      })) || []
+      }))
 
       setApplications(transformed)
     } catch (error) {

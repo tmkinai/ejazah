@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useSession, signOut } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -37,48 +37,41 @@ interface DashboardHeaderProps {
 
 export default function DashboardHeader({ appSettings }: DashboardHeaderProps) {
   const router = useRouter()
-  const supabase = createClient()
-  const [user, setUser] = useState<any>(null)
+  const { data: session } = useSession()
+  const user = session?.user
   const [profile, setProfile] = useState<any>(null)
   const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => {
-    loadUserData()
-  }, [])
+    if (user) {
+      loadUserData()
+    }
+  }, [user])
 
   const loadUserData = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      setUser(user)
-
       // Fetch profile
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-
-      if (profileData) {
-        setProfile(profileData)
+      const profileRes = await fetch('/api/profiles')
+      if (profileRes.ok) {
+        const profileData = await profileRes.json()
+        if (profileData) {
+          setProfile(profileData)
+        }
       }
 
       // Fetch unread notifications count
-      const { count } = await supabase
-        .from('notifications')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('is_read', false)
-
-      setUnreadCount(count || 0)
+      const notifRes = await fetch('/api/notifications?count=true&unread=true')
+      if (notifRes.ok) {
+        const notifData = await notifRes.json()
+        setUnreadCount(notifData.count || 0)
+      }
     } catch (error) {
       console.error('Error loading user data:', error)
     }
   }
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
+    await signOut({ redirect: false })
     router.push('/auth/login')
   }
 
@@ -199,7 +192,7 @@ export default function DashboardHeader({ appSettings }: DashboardHeaderProps) {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                
+
                 {/* Admin Dashboard */}
                 {isAdmin && (
                   <DropdownMenuItem asChild className="flex-row-reverse">
@@ -241,7 +234,7 @@ export default function DashboardHeader({ appSettings }: DashboardHeaderProps) {
                 <DropdownMenuSeparator />
 
                 {/* Logout */}
-                <DropdownMenuItem 
+                <DropdownMenuItem
                   onClick={handleLogout}
                   className="text-red-600 focus:text-red-600 cursor-pointer flex-row-reverse"
                 >

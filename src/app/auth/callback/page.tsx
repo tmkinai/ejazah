@@ -2,27 +2,14 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 
+// With Auth.js, the OAuth callback is handled automatically by the
+// [...nextauth] route. This page just shows a loading state and redirects.
 export default function AuthCallbackPage() {
   const router = useRouter()
 
   useEffect(() => {
-    const supabase = createClient()
-
-    const handleCallback = async () => {
-      const { error } = await supabase.auth.exchangeCodeForSession(
-        window.location.href
-      )
-
-      if (error) {
-        router.push('/auth/login?error=oauth_failed')
-      } else {
-        router.push('/dashboard')
-      }
-    }
-
-    handleCallback()
+    router.push('/dashboard')
   }, [router])
 
   return (

@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -25,7 +24,6 @@ interface Scholar {
 }
 
 export default function ScholarsPage() {
-  const supabase = createClient()
   const [loading, setLoading] = useState(true)
   const [scholars, setScholars] = useState<Scholar[]>([])
   const [searchTerm, setSearchTerm] = useState('')
@@ -34,16 +32,12 @@ export default function ScholarsPage() {
   useEffect(() => {
     async function loadScholars() {
       try {
-        const { data, error } = await supabase
-          .from('scholars')
-          .select(`
-            *,
-            profiles!inner(full_name_arabic)
-          `)
-          .order('certificates_issued', { ascending: false })
-
-        if (error) throw error
-        setScholars(data || [])
+        const res = await fetch('/api/scholars')
+        if (!res.ok) throw new Error('Failed to fetch scholars')
+        const data = await res.json()
+        // Handle both array response and single object
+        const scholarsArray = Array.isArray(data) ? data : [data]
+        setScholars(scholarsArray)
       } catch (error) {
         console.error('Error loading scholars:', error)
       } finally {
@@ -52,7 +46,7 @@ export default function ScholarsPage() {
     }
 
     loadScholars()
-  }, [supabase])
+  }, [])
 
   const filteredScholars = scholars.filter(scholar => {
     const matchesSearch = 

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/client'
+import { signIn } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -27,7 +27,6 @@ type LoginFormData = z.infer<typeof loginSchema>
 
 export function LoginForm() {
   const router = useRouter()
-  const supabase = createClient()
   const [loading, setLoading] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)
 
@@ -37,7 +36,7 @@ export function LoginForm() {
     formState: { errors, isValid },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
-    mode: 'onChange', // Enable real-time validation
+    mode: 'onChange',
   })
 
   const onSubmit = async (data: LoginFormData) => {
@@ -45,22 +44,14 @@ export function LoginForm() {
     setServerError(null)
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const result = await signIn('credentials', {
         email: data.email,
         password: data.password,
+        redirect: false,
       })
 
-      if (error) {
-        // Translate common Supabase errors
-        if (error.message.includes('Invalid login credentials')) {
-          setServerError('البريد الإلكتروني أو كلمة المرور غير صحيحة')
-        } else if (error.message.includes('Email not confirmed')) {
-          setServerError('يرجى تأكيد بريدك الإلكتروني أولاً')
-        } else if (error.message.includes('Too many requests')) {
-          setServerError('محاولات كثيرة جداً. يرجى الانتظار قليلاً.')
-        } else {
-          setServerError(error.message)
-        }
+      if (result?.error) {
+        setServerError('البريد الإلكتروني أو كلمة المرور غير صحيحة')
         setLoading(false)
         return
       }
@@ -76,15 +67,10 @@ export function LoginForm() {
   const handleGoogleLogin = async () => {
     setLoading(true)
     setServerError(null)
-    
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    })
 
-    if (error) {
+    try {
+      await signIn('google', { callbackUrl: '/dashboard' })
+    } catch (error) {
       setServerError('فشل الاتصال بـ Google. يرجى المحاولة مرة أخرى.')
       setLoading(false)
     }
@@ -159,8 +145,8 @@ export function LoginForm() {
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label htmlFor="password">كلمة المرور</Label>
-            <a 
-              href="/auth/forgot-password" 
+            <a
+              href="/auth/forgot-password"
               className="text-xs text-primary hover:underline"
             >
               نسيت كلمة المرور؟
@@ -181,9 +167,9 @@ export function LoginForm() {
           )}
         </div>
 
-        <Button 
-          type="submit" 
-          className="w-full" 
+        <Button
+          type="submit"
+          className="w-full"
           disabled={loading}
           data-testid="login-submit-button"
         >

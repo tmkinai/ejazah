@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,7 +19,6 @@ import {
 } from '@/components/ui/alert-dialog'
 
 export default function StudentsManagement() {
-  const supabase = createClient()
   const [students, setStudents] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -34,12 +32,10 @@ export default function StudentsManagement() {
   const loadStudents = async () => {
     try {
       setIsLoading(true)
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false })
+      const res = await fetch('/api/admin/students')
+      if (!res.ok) throw new Error('Failed to fetch students')
 
-      if (error) throw error
+      const data = await res.json()
       setStudents(data || [])
     } catch (error) {
       console.error('Error loading students:', error)
@@ -52,12 +48,11 @@ export default function StudentsManagement() {
     if (!deleteDialog.id) return
 
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', deleteDialog.id)
+      const res = await fetch(`/api/admin/students?id=${deleteDialog.id}`, {
+        method: 'DELETE',
+      })
 
-      if (error) throw error
+      if (!res.ok) throw new Error('Failed to delete student')
 
       setDeleteDialog({ open: false, id: null })
       await loadStudents()

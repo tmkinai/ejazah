@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -29,48 +29,29 @@ interface NotificationCenterProps {
 }
 
 export function NotificationCenter({ onClose }: NotificationCenterProps) {
-  const supabase = createClient()
+  const { data: session } = useSession()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
   const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => {
+    if (!session?.user) return
+
     loadNotifications()
-    
-    // Subscribe to real-time notifications
-    const channel = supabase
-      .channel('notifications')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'notifications',
-        },
-        () => {
-          loadNotifications()
-        }
-      )
-      .subscribe()
+
+    // Poll for new notifications every 30 seconds
+    const interval = setInterval(loadNotifications, 30000)
 
     return () => {
-      supabase.removeChannel(channel)
+      clearInterval(interval)
     }
-  }, [])
+  }, [session?.user])
 
   async function loadNotifications() {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(20)
-
-      if (error) throw error
+      const res = await fetch('/api/notifications')
+      if (!res.ok) throw new Error('Failed to load notifications')
+      const data = await res.json()
 
       setNotifications(data || [])
       setUnreadCount(data?.filter((n: any) => !n.is_read).length || 0)
@@ -83,13 +64,15 @@ export function NotificationCenter({ onClose }: NotificationCenterProps) {
 
   async function markAsRead(notificationId: string) {
     try {
-      const { error } = await supabase.rpc('mark_notification_read', {
-        notification_id: notificationId
+      const res = await fetch('/api/notifications/mark-read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notificationId }),
       })
 
-      if (error) throw error
-      
-      setNotifications(notifications.map(n => 
+      if (!res.ok) throw new Error('Failed to mark notification as read')
+
+      setNotifications(notifications.map(n =>
         n.id === notificationId ? { ...n, is_read: true } : n
       ))
       setUnreadCount(Math.max(0, unreadCount - 1))
@@ -100,9 +83,11 @@ export function NotificationCenter({ onClose }: NotificationCenterProps) {
 
   async function markAllAsRead() {
     try {
-      const { error } = await supabase.rpc('mark_all_notifications_read')
-      if (error) throw error
-      
+      const res = await fetch('/api/notifications/mark-all-read', {
+        method: 'POST',
+      })
+      if (!res.ok) throw new Error('Failed to mark all as read')
+
       setNotifications(notifications.map(n => ({ ...n, is_read: true })))
       setUnreadCount(0)
     } catch (error) {
@@ -206,7 +191,7 @@ export function NotificationCenter({ onClose }: NotificationCenterProps) {
                   <div className="flex-shrink-0 mt-1">
                     {getIcon(notification.type)}
                   </div>
-                  
+
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <h4 className={`text-sm font-semibold ${
@@ -220,11 +205,11 @@ export function NotificationCenter({ onClose }: NotificationCenterProps) {
                         </Badge>
                       )}
                     </div>
-                    
+
                     <p className="text-sm text-muted-foreground mb-2">
                       {notification.message}
                     </p>
-                    
+
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs text-muted-foreground">
                         {formatDistanceToNow(new Date(notification.created_at), {
@@ -232,7 +217,7 @@ export function NotificationCenter({ onClose }: NotificationCenterProps) {
                           locale: ar,
                         })}
                       </span>
-                      
+
                       <div className="flex gap-2">
                         {notification.action_url && notification.action_label && (
                           <Link href={notification.action_url}>

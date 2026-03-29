@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -33,7 +33,7 @@ interface Application {
 export default function ApplicationReviewPage() {
   const router = useRouter()
   const params = useParams()
-  const supabase = createClient()
+  const { data: session, status: sessionStatus } = useSession()
   const [loading, setLoading] = useState(true)
   const [application, setApplication] = useState<Application | null>(null)
   const [processing, setProcessing] = useState(false)
@@ -42,37 +42,16 @@ export default function ApplicationReviewPage() {
   useEffect(() => {
     async function loadApplication() {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) {
+        if (sessionStatus === 'loading') return
+        if (!session?.user) {
           router.push('/auth/login')
           return
         }
 
         // Fetch application details
-        const { data: appData, error } = await supabase
-          .from('ijazah_applications')
-          .select(`
-            id,
-            application_number,
-            ijazah_type,
-            status,
-            submitted_at,
-            personal_info,
-            academic_background,
-            quran_experience,
-            prerequisites,
-            documents,
-            reviewer_notes,
-            profiles:user_id (
-              full_name,
-              email,
-              phone_number
-            )
-          `)
-          .eq('id', params.id)
-          .single()
-
-        if (error) throw error
+        const res = await fetch(`/api/admin/requests?id=${params.id}`)
+        if (!res.ok) throw new Error('Failed to load application')
+        const appData = await res.json()
 
         if (!appData) {
           router.push('/scholar')
@@ -92,9 +71,9 @@ export default function ApplicationReviewPage() {
           documents: appData.documents,
           reviewer_notes: appData.reviewer_notes,
           user: {
-            full_name: (appData.profiles as any)?.full_name || 'Unknown',
-            email: (appData.profiles as any)?.email || '',
-            phone_number: (appData.profiles as any)?.phone_number,
+            full_name: appData.profiles?.full_name || appData.user?.full_name || 'Unknown',
+            email: appData.profiles?.email || appData.user?.email || '',
+            phone_number: appData.profiles?.phone_number || appData.user?.phone_number,
           },
         }
 
@@ -107,27 +86,30 @@ export default function ApplicationReviewPage() {
       }
     }
 
-    if (params.id) {
+    if (params.id && sessionStatus !== 'loading') {
       loadApplication()
     }
-  }, [params.id, router, supabase])
+  }, [params.id, router, session, sessionStatus])
 
   const handleApprove = async () => {
     if (!application) return
-    
+
     setProcessing(true)
     try {
-      // Update application status to approved
-      const { error } = await supabase
-        .from('ijazah_applications')
-        .update({
+      const res = await fetch('/api/admin/requests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: application.id,
           status: 'approved',
-          reviewer_notes: notes,
-          decided_at: new Date().toISOString(),
-        })
-        .eq('id', application.id)
+          adminNotes: notes,
+        }),
+      })
 
-      if (error) throw error
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to approve')
+      }
 
       alert('تم الموافقة على الطلب بنجاح!')
       router.push('/scholar')
@@ -149,16 +131,20 @@ export default function ApplicationReviewPage() {
 
     setProcessing(true)
     try {
-      const { error } = await supabase
-        .from('ijazah_applications')
-        .update({
+      const res = await fetch('/api/admin/requests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: application.id,
           status: 'rejected',
-          reviewer_notes: notes,
-          decided_at: new Date().toISOString(),
-        })
-        .eq('id', application.id)
+          adminNotes: notes,
+        }),
+      })
 
-      if (error) throw error
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to reject')
+      }
 
       alert('تم رفض الطلب')
       router.push('/scholar')
@@ -176,15 +162,19 @@ export default function ApplicationReviewPage() {
 
     setProcessing(true)
     try {
-      const { error } = await supabase
-        .from('ijazah_applications')
-        .update({
+      const res = await fetch('/api/admin/requests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: application.id,
           status: 'under_review',
-          reviewed_at: new Date().toISOString(),
-        })
-        .eq('id', application.id)
+        }),
+      })
 
-      if (error) throw error
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to start review')
+      }
 
       setApplication({ ...application, status: 'under_review' })
     } catch (error) {
@@ -388,7 +378,7 @@ export default function ApplicationReviewPage() {
                     بدء المراجعة
                   </Button>
                 )}
-                
+
                 {['under_review', 'interview_scheduled'].includes(application.status) && (
                   <>
                     <Button

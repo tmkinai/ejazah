@@ -10,7 +10,6 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Loader2, ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Upload, X, Mic, FileAudio } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
 
 // Validation schemas for each step
 const ijazahTypeSchema = z.object({
@@ -110,7 +109,6 @@ const PROFICIENCY_LEVELS = [
 ]
 
 export function IjazahApplicationForm() {
-  const supabase = createClient()
   const [step, setStep] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -133,14 +131,16 @@ export function IjazahApplicationForm() {
   }, [])
 
   const loadNarrationTypes = async () => {
-    const { data } = await supabase
-      .from('narration_types')
-      .select('*')
-      .eq('active', true)
-      .order('display_order')
-    
-    if (data) {
-      setNarrationTypes(data)
+    try {
+      const res = await fetch('/api/scholars?narrationTypes=true')
+      if (res.ok) {
+        const data = await res.json()
+        if (Array.isArray(data)) {
+          setNarrationTypes(data)
+        }
+      }
+    } catch (error) {
+      console.error('Error loading narration types:', error)
     }
   }
 
@@ -221,26 +221,24 @@ export function IjazahApplicationForm() {
   // Handle audio file upload
   const handleAudioUpload = async (file: File) => {
     if (!file) return
-    
+
     setUploadingAudio(true)
     setAudioFile(file)
-    
+
     try {
-      const fileExt = file.name.split('.').pop()
-      const fileName = `audio_${Date.now()}.${fileExt}`
-      const filePath = `applications/audio/${fileName}`
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('bucket', 'applications-audio')
 
-      const { error: uploadError } = await supabase.storage
-        .from('media')
-        .upload(filePath, file)
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      })
 
-      if (uploadError) throw uploadError
+      if (!res.ok) throw new Error('Upload failed')
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('media')
-        .getPublicUrl(filePath)
-
-      setAudioUrl(publicUrl)
+      const { url } = await res.json()
+      setAudioUrl(url)
     } catch (error) {
       console.error('Error uploading audio:', error)
       setError('فشل رفع الملف الصوتي')
@@ -252,32 +250,30 @@ export function IjazahApplicationForm() {
   // Handle previous ijazah files upload
   const handleIjazahFilesUpload = async (files: FileList) => {
     if (!files.length) return
-    
+
     setUploadingFiles(true)
     const newFiles = Array.from(files)
     setPreviousIjazahFiles(prev => [...prev, ...newFiles])
-    
+
     try {
       const uploadedUrls: string[] = []
-      
+
       for (const file of newFiles) {
-        const fileExt = file.name.split('.').pop()
-        const fileName = `ijazah_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`
-        const filePath = `applications/ijazahs/${fileName}`
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('bucket', 'applications-ijazahs')
 
-        const { error: uploadError } = await supabase.storage
-          .from('media')
-          .upload(filePath, file)
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        })
 
-        if (uploadError) throw uploadError
+        if (!res.ok) throw new Error('Upload failed')
 
-        const { data: { publicUrl } } = supabase.storage
-          .from('media')
-          .getPublicUrl(filePath)
-
-        uploadedUrls.push(publicUrl)
+        const { url } = await res.json()
+        uploadedUrls.push(url)
       }
-      
+
       setPreviousIjazahUrls(prev => [...prev, ...uploadedUrls])
     } catch (error) {
       console.error('Error uploading files:', error)

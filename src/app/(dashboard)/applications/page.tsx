@@ -2,15 +2,23 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Logo } from '@/components/shared/logo'
 import { Loader2, Plus, Eye, Edit2, Trash2, ArrowRight } from 'lucide-react'
-import type { Database } from '@/types/supabase'
 
-type Application = Database['public']['Tables']['ijazah_applications']['Row']
+type Application = {
+  id: string
+  application_number: string
+  ijazah_type: string
+  status: string
+  created_at: string
+  submitted_at: string | null
+  user_id: string
+  [key: string]: any
+}
 
 const statusColors: Record<string, { bg: string; text: string; label: string }> = {
   draft: { bg: 'bg-gray-100', text: 'text-gray-800', label: 'مسودة' },
@@ -32,31 +40,24 @@ const ijazahTypeLabels: Record<string, string> = {
 
 export default function ApplicationsPage() {
   const router = useRouter()
-  const supabase = createClient()
+  const { data: session, status: sessionStatus } = useSession()
   const [applications, setApplications] = useState<Application[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (sessionStatus === 'loading') return
+    if (!session?.user) {
+      router.push('/auth/login')
+      return
+    }
+
     async function loadApplications() {
       try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser()
-
-        if (!user) {
-          router.push('/auth/login')
-          return
-        }
-
-        const { data, error } = await supabase
-          .from('ijazah_applications')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-
-        if (error) throw error
-        setApplications(data || [])
+        const res = await fetch('/api/admin/requests')
+        const result = await res.json()
+        if (!res.ok) throw new Error(result.error)
+        setApplications(result.data || [])
       } catch (err) {
         console.error('Error loading applications:', err)
         setError('فشل تحميل الطلبات')
@@ -66,18 +67,18 @@ export default function ApplicationsPage() {
     }
 
     loadApplications()
-  }, [supabase, router])
+  }, [sessionStatus, session, router])
 
   const handleDelete = async (applicationId: string) => {
     if (!confirm('هل أنت متأكد من حذف هذا الطلب؟')) return
 
     try {
-      const { error } = await supabase
-        .from('ijazah_applications')
-        .delete()
-        .eq('id', applicationId)
-
-      if (error) throw error
+      const res = await fetch(`/api/admin/requests`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: applicationId, action: 'delete' }),
+      })
+      if (!res.ok) throw new Error('Failed to delete')
       setApplications(applications.filter((app) => app.id !== applicationId))
     } catch (err) {
       console.error('Error deleting application:', err)

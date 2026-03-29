@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,7 +11,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Loader2, Save, BookOpen, AlertCircle } from 'lucide-react'
 
 export default function BiographyPage() {
-  const supabase = createClient()
+  const { data: session, status: sessionStatus } = useSession()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -27,29 +27,26 @@ export default function BiographyPage() {
   })
 
   useEffect(() => {
+    if (sessionStatus === 'loading') return
+    if (!session) return
     loadBiography()
-  }, [])
+  }, [session, sessionStatus])
 
   const loadBiography = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { data } = await supabase
-        .from('biographies')
-        .select('*')
-        .eq('scholar_id', user.id)
-        .single()
+      const res = await fetch('/api/biographies')
+      if (!res.ok) return
+      const data = await res.json()
 
       if (data) {
         setBiography({
-          full_name: data.full_name || '',
+          full_name: data.full_name || data.fullName || '',
           title: data.title || '',
           specialization: data.specialization || '',
-          education_text: data.education_text || '',
-          certificates_text: data.certificates_text || '',
-          sanad_image_urls: data.sanad_image_urls || [],
-          is_public: data.is_public ?? true,
+          education_text: data.education_text || data.educationText || '',
+          certificates_text: data.certificates_text || data.certificatesText || '',
+          sanad_image_urls: data.sanad_image_urls || data.sanadImageUrls || [],
+          is_public: data.is_public ?? data.isPublic ?? true,
         })
       }
     } catch (error) {
@@ -65,41 +62,16 @@ export default function BiographyPage() {
     setSuccess(false)
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('User not authenticated')
+      const res = await fetch('/api/biographies', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(biography),
+      })
 
-      // Check if scholar record exists, create if not
-      const { data: scholarData } = await supabase
-        .from('scholars')
-        .select('id')
-        .eq('id', user.id)
-        .single()
-
-      if (!scholarData) {
-        // Create scholar record first
-        const { error: scholarError } = await supabase
-          .from('scholars')
-          .insert({
-            id: user.id,
-            specialization: biography.specialization || 'غير محدد',
-            is_active: true,
-          })
-
-        if (scholarError) {
-          console.error('Error creating scholar record:', scholarError)
-          throw new Error('حدث خطأ في إنشاء سجل الشيخ')
-        }
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'حدث خطأ أثناء الحفظ')
       }
-
-      // Now save the biography
-      const { error: upsertError } = await supabase
-        .from('biographies')
-        .upsert({
-          scholar_id: user.id,
-          ...biography,
-        })
-
-      if (upsertError) throw upsertError
 
       setSuccess(true)
       setTimeout(() => setSuccess(false), 3000)

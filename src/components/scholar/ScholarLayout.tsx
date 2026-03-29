@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 import ScholarSidebar from '@/components/scholar/ScholarSidebar'
 import { Loader2 } from 'lucide-react'
 import { Logo } from '@/components/shared/logo'
@@ -13,27 +13,26 @@ interface ScholarLayoutProps {
 
 export default function ScholarLayout({ children }: ScholarLayoutProps) {
   const router = useRouter()
-  const supabase = createClient()
+  const { data: session, status } = useSession()
   const [loading, setLoading] = useState(true)
   const [isScholar, setIsScholar] = useState(false)
 
   useEffect(() => {
+    if (status === 'loading') return
+
+    if (!session?.user) {
+      router.push('/auth/login')
+      return
+    }
+
     checkScholarAccess()
-  }, [])
+  }, [session, status])
 
   const checkScholarAccess = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.push('/auth/login')
-        return
-      }
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('roles')
-        .eq('id', user.id)
-        .single()
+      const res = await fetch('/api/profiles')
+      if (!res.ok) throw new Error('Failed to load profile')
+      const profile = await res.json()
 
       if (!profile?.roles?.includes('scholar') && !profile?.roles?.includes('admin')) {
         router.push('/dashboard')
@@ -49,7 +48,7 @@ export default function ScholarLayout({ children }: ScholarLayoutProps) {
     }
   }
 
-  if (loading) {
+  if (loading || status === 'loading') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background">
         <Logo size="lg" className="mb-8" />

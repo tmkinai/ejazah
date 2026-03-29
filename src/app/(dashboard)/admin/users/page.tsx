@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -22,28 +22,24 @@ interface UserProfile {
 
 export default function AdminUsersPage() {
   const router = useRouter()
-  const supabase = createClient()
+  const { data: session, status: sessionStatus } = useSession()
   const [loading, setLoading] = useState(true)
   const [users, setUsers] = useState<UserProfile[]>([])
   const [searchTerm, setSearchTerm] = useState('')
 
   useEffect(() => {
+    if (sessionStatus === 'loading') return
+    if (!session?.user) {
+      router.push('/auth/login')
+      return
+    }
+
     async function loadData() {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) {
-          router.push('/auth/login')
-          return
-        }
-
-        // Fetch all users (admin can see all via RLS)
-        const { data: usersData, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .order('created_at', { ascending: false })
-
-        if (error) throw error
-        setUsers(usersData || [])
+        const res = await fetch('/api/profiles?all=true')
+        const result = await res.json()
+        if (!res.ok) throw new Error(result.error)
+        setUsers(result.data || [])
       } catch (error) {
         console.error('Error loading users:', error)
       } finally {
@@ -52,7 +48,7 @@ export default function AdminUsersPage() {
     }
 
     loadData()
-  }, [router, supabase])
+  }, [router, sessionStatus, session])
 
   const filteredUsers = users.filter(user =>
     user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||

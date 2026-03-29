@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -30,61 +30,43 @@ interface Application {
 
 export default function AdminApplicationsPage() {
   const router = useRouter()
-  const supabase = createClient()
+  const { data: session, status: sessionStatus } = useSession()
   const [loading, setLoading] = useState(true)
   const [applications, setApplications] = useState<Application[]>([])
   const [filter, setFilter] = useState('all')
 
   useEffect(() => {
+    if (sessionStatus === 'loading') return
+    if (!session?.user) {
+      router.push('/auth/login')
+      return
+    }
+
     async function loadData() {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) {
-          router.push('/auth/login')
-          return
-        }
+        const res = await fetch('/api/admin/requests')
+        const result = await res.json()
+        if (!res.ok) throw new Error(result.error)
 
-        // Fetch all applications (admin can see all via RLS)
-        const { data: appsData, error } = await supabase
-          .from('ijazah_applications')
-          .select(`
-            id,
-            application_number,
-            ijazah_type,
-            status,
-            submitted_at,
-            profiles:user_id (
-              full_name,
-              email
-            ),
-            scholars:scholar_id (
-              id,
-              profiles:id (
-                full_name
-              )
-            )
-          `)
-          .order('submitted_at', { ascending: false })
+        const appsData = result.data || []
 
-        if (error) throw error
-
-        const transformedApps = appsData?.map((app: any) => ({
+        const transformedApps = appsData.map((app: any) => ({
           id: app.id,
-          application_number: app.application_number,
-          ijazah_type: app.ijazah_type,
+          application_number: app.application_number || app.applicationNumber,
+          ijazah_type: app.ijazah_type || app.ijazahType,
           status: app.status,
-          submitted_at: app.submitted_at,
+          submitted_at: app.submitted_at || app.submittedAt,
           user: {
-            full_name: app.profiles?.full_name || 'Unknown',
-            email: app.profiles?.email || '',
+            full_name: app.user?.full_name || app.profiles?.full_name || 'Unknown',
+            email: app.user?.email || app.profiles?.email || '',
           },
-          scholar: app.scholars ? {
-            id: app.scholars.id,
+          scholar: app.scholar ? {
+            id: app.scholar.id,
             profile: {
-              full_name: app.scholars.profiles?.full_name || 'Unknown'
+              full_name: app.scholar.profile?.full_name || app.scholar.profiles?.full_name || 'Unknown'
             }
           } : null,
-        })) || []
+        }))
 
         setApplications(transformedApps)
       } catch (error) {
@@ -95,7 +77,7 @@ export default function AdminApplicationsPage() {
     }
 
     loadData()
-  }, [router, supabase])
+  }, [router, sessionStatus, session])
 
   const filteredApplications = filter === 'all' 
     ? applications 

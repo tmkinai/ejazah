@@ -1,0 +1,274 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Auth.js required tables ───────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ─── Application tables ────────────────────────────────────────────────
+
+model User {
+  id             String    @id @default(cuid())
+  name           String?
+  email          String    @unique
+  emailVerified  DateTime? @map("email_verified")
+  image          String?   @db.Text
+  hashedPassword String?   @map("hashed_password")
+
+  accounts Account[]
+  sessions Session[]
+  profile  Profile?
+
+  @@map("users")
+}
+
+model Profile {
+  id                String   @id
+  fullName          String?  @map("full_name")
+  fullNameArabic    String?  @map("full_name_arabic")
+  email             String
+  phoneNumber       String?  @map("phone_number")
+  dateOfBirth       String?  @map("date_of_birth")
+  gender            String?
+  country           String?
+  city              String?
+  avatarUrl         String?  @map("avatar_url") @db.Text
+  bio               String?  @db.Text
+  isVerified        Boolean  @default(false) @map("is_verified")
+  verificationLevel String   @default("none") @map("verification_level")
+  roles             Json     @default("[\"student\"]")
+  metadata          Json     @default("{}")
+  preferences       Json     @default("{}")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  user                User                @relation(fields: [id], references: [id], onDelete: Cascade)
+  scholar             Scholar?
+  scholarApplication  ScholarApplication?
+  biography           Biography?
+  applicationsAsUser  IjazahApplication[] @relation("ApplicationUser")
+  certificatesAsUser  IjazahCertificate[] @relation("CertificateUser")
+  notifications       Notification[]
+
+  @@map("profiles")
+}
+
+model Scholar {
+  id                  String   @id
+  specialization      String
+  credentials         Json     @default("{}")
+  sanadChain          Json     @default("{}") @map("sanad_chain")
+  isActive            Boolean  @default(true) @map("is_active")
+  acceptanceRate      Float?   @map("acceptance_rate")
+  totalIjazatIssued   Int      @default(0) @map("total_ijazat_issued")
+  bioDetailed         String?  @map("bio_detailed") @db.Text
+  profileVisibility   String   @default("public") @map("profile_visibility")
+  certificatesIssued  Int      @default(0) @map("certificates_issued")
+  yearsOfExperience   Int?     @map("years_of_experience")
+  metadata            Json     @default("{}")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  profile                  Profile             @relation(fields: [id], references: [id], onDelete: Cascade)
+  applicationsAsScholar    IjazahApplication[] @relation("ApplicationScholar")
+  certificatesAsScholar    IjazahCertificate[] @relation("CertificateScholar")
+
+  @@map("scholars")
+}
+
+model IjazahApplication {
+  id                     String    @id @default(cuid())
+  userId                 String?   @map("user_id")
+  scholarId              String?   @map("scholar_id")
+  applicationNumber      String    @unique @map("application_number")
+  ijazahType             String    @map("ijazah_type")
+  status                 String    @default("draft")
+  personalInfo           Json      @default("{}") @map("personal_info")
+  academicBackground     Json      @default("{}") @map("academic_background")
+  quranExperience        Json      @default("{}") @map("quran_experience")
+  prerequisites          Json?
+  documents              Json?
+  reviewerNotes          String?   @map("reviewer_notes") @db.Text
+  interviewNotes         String?   @map("interview_notes") @db.Text
+  adminNotes             String?   @map("admin_notes") @db.Text
+  prerequisitesVerified  Boolean   @default(false) @map("prerequisites_verified")
+  submittedAt            DateTime? @map("submitted_at")
+  reviewedAt             DateTime? @map("reviewed_at")
+  interviewScheduledAt   DateTime? @map("interview_scheduled_at")
+  interviewCompletedAt   DateTime? @map("interview_completed_at")
+  decidedAt              DateTime? @map("decided_at")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  userProfile    Profile?            @relation("ApplicationUser", fields: [userId], references: [id])
+  scholar        Scholar?            @relation("ApplicationScholar", fields: [scholarId], references: [id])
+  certificates   IjazahCertificate[]
+
+  @@map("ijazah_applications")
+}
+
+model IjazahCertificate {
+  id                String    @id @default(cuid())
+  applicationId     String?   @map("application_id")
+  userId            String?   @map("user_id")
+  scholarId         String?   @map("scholar_id")
+  certificateNumber String    @unique @map("certificate_number")
+  ijazahType        String    @map("ijazah_type")
+  status            String    @default("active")
+  recitation        String?
+  memorializationLevel String? @map("memorization_level")
+  sanadChain        Json      @default("{}") @map("sanad_chain")
+  issueDate         String?   @map("issue_date")
+  qrCodeData        String?   @map("qr_code_data") @db.LongText
+  qrCodeUrl         String?   @map("qr_code_url") @db.LongText
+  verificationHash  String?   @map("verification_hash")
+  verificationCount Int       @default(0) @map("verification_count")
+  lastVerifiedAt    DateTime? @map("last_verified_at")
+  isPublic          Boolean   @default(false) @map("is_public")
+  metadata          Json      @default("{}")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  application       IjazahApplication? @relation(fields: [applicationId], references: [id])
+  userProfile       Profile?           @relation("CertificateUser", fields: [userId], references: [id])
+  scholar           Scholar?           @relation("CertificateScholar", fields: [scholarId], references: [id])
+  verificationLogs  VerificationLog[]
+
+  @@map("ijazah_certificates")
+}
+
+model Notification {
+  id                     String    @id @default(cuid())
+  userId                 String    @map("user_id")
+  type                   String    @default("info")
+  title                  String
+  message                String    @db.Text
+  priority               String    @default("normal")
+  isRead                 Boolean   @default(false) @map("is_read")
+  actionUrl              String?   @map("action_url")
+  actionLabel            String?   @map("action_label")
+  relatedApplicationId   String?   @map("related_application_id")
+  relatedCertificateId   String?   @map("related_certificate_id")
+  createdAt              DateTime  @default(now()) @map("created_at")
+
+  profile Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+model ScholarApplication {
+  id              String   @id @default(cuid())
+  userId          String   @unique @map("user_id")
+  specialization  String
+  bio             String?  @db.Text
+  credentials     Json     @default("{}")
+  sanadChain      Json     @default("{}") @map("sanad_chain")
+  documents       Json?
+  status          String   @default("pending")
+  submittedAt     DateTime @default(now()) @map("submitted_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  profile Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("scholar_applications")
+}
+
+model Biography {
+  id               String   @id @default(cuid())
+  scholarId        String   @unique @map("scholar_id")
+  fullName         String?  @map("full_name")
+  title            String?
+  specialization   String?
+  educationText    String?  @map("education_text") @db.Text
+  certificatesText String?  @map("certificates_text") @db.Text
+  sanadImageUrls   Json?    @map("sanad_image_urls")
+  isPublic         Boolean  @default(true) @map("is_public")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  profile Profile @relation(fields: [scholarId], references: [id], onDelete: Cascade)
+
+  @@map("biographies")
+}
+
+model AppSettings {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
+}
+
+model VerificationLog {
+  id                 String   @id @default(cuid())
+  certificateId      String?  @map("certificate_id")
+  verifierIp         String?  @map("verifier_ip")
+  verifierUserAgent  String?  @map("verifier_user_agent") @db.Text
+  verificationMethod String?  @map("verification_method")
+  success            Boolean  @default(false)
+  failureReason      String?  @map("failure_reason")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  certificate IjazahCertificate? @relation(fields: [certificateId], references: [id])
+
+  @@map("verification_logs")
+}
+
+model Submission {
+  id           String   @id @default(cuid())
+  requestId    String?  @map("request_id")
+  studentEmail String?  @map("student_email")
+  audioUrl     String?  @map("audio_url") @db.Text
+  studentNotes String?  @map("student_notes") @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("submissions")
+}

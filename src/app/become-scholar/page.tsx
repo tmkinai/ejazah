@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,7 +27,7 @@ type ScholarApplicationFormData = z.infer<typeof scholarApplicationSchema>
 
 export default function BecomeScholarPage() {
   const router = useRouter()
-  const supabase = createClient()
+  const { data: session, status: sessionStatus } = useSession()
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -45,41 +45,31 @@ export default function BecomeScholarPage() {
   })
 
   useEffect(() => {
+    if (sessionStatus === 'loading') return
+    if (!session) {
+      router.push('/auth/login')
+      return
+    }
     checkUserStatus()
-  }, [])
+  }, [session, sessionStatus])
 
   const checkUserStatus = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.push('/auth/login')
-        return
-      }
-
-      // Check if user is already a scholar
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('roles')
-        .eq('id', user.id)
-        .single()
-
-      if (profile?.roles?.includes('scholar')) {
+      // Check if user is already a scholar by checking roles from session
+      const userRoles = (session?.user as any)?.roles || []
+      if (userRoles.includes('scholar')) {
         setIsScholar(true)
         setLoading(false)
         return
       }
 
       // Check if user has pending/approved application
-      const { data: application } = await supabase
-        .from('scholar_applications')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
-
-      if (application) {
-        setExistingApplication(application)
+      const res = await fetch('/api/scholar-applications')
+      if (res.ok) {
+        const applications = await res.json()
+        if (applications && applications.length > 0) {
+          setExistingApplication(applications[0])
+        }
       }
     } catch (error) {
       console.error('Error checking user status:', error)
@@ -94,24 +84,19 @@ export default function BecomeScholarPage() {
 
     setUploadingDocument(true)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('User not authenticated')
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('bucket', 'scholar-documents')
 
-      const fileExt = file.name.split('.').pop()
-      const fileName = `${user.id}_${Date.now()}.${fileExt}`
-      const filePath = `scholar-documents/${fileName}`
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      })
 
-      const { error: uploadError } = await supabase.storage
-        .from('media')
-        .upload(filePath, file)
+      if (!res.ok) throw new Error('Upload failed')
 
-      if (uploadError) throw uploadError
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('media')
-        .getPublicUrl(filePath)
-
-      setDocuments([...documents, { name: file.name, url: publicUrl }])
+      const { url } = await res.json()
+      setDocuments([...documents, { name: file.name, url }])
     } catch (err: any) {
       console.error('Error uploading document:', err)
       setError('فشل رفع المستند. يرجى المحاولة مرة أخرى.')
@@ -129,9 +114,6 @@ export default function BecomeScholarPage() {
     setError(null)
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('User not authenticated')
-
       // Parse credentials and sanad_chain
       let credentialsJson
       let sanadChainJson
@@ -148,20 +130,22 @@ export default function BecomeScholarPage() {
         sanadChainJson = { chain: data.sanad_chain }
       }
 
-      const { error: insertError } = await supabase
-        .from('scholar_applications')
-        .insert({
-          user_id: user.id,
+      const res = await fetch('/api/scholar-applications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           specialization: data.specialization,
           bio: data.bio,
           credentials: credentialsJson,
           sanad_chain: sanadChainJson,
           documents: documents,
-          status: 'pending',
-          submitted_at: new Date().toISOString(),
-        })
+        }),
+      })
 
-      if (insertError) throw insertError
+      if (!res.ok) {
+        const errData = await res.json()
+        throw new Error(errData.error || 'حدث خطأ أثناء تقديم الطلب')
+      }
 
       // Redirect to dashboard with success message
       router.push('/dashboard?message=application_submitted')

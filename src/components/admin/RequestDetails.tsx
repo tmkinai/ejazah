@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { createClient } from '@/lib/supabase/client'
 import { Eye, Volume2, Settings, Loader2, Save, CheckCircle2, X, PlayCircle } from 'lucide-react'
 
 const statusConfig: Record<string, { icon: any; color: string; label: string; bg: string }> = {
@@ -27,7 +26,6 @@ interface RequestDetailsProps {
 }
 
 export default function RequestDetails({ request, onUpdateRequest }: RequestDetailsProps) {
-  const supabase = createClient()
   const [isUpdating, setIsUpdating] = useState(false)
   const [updatedData, setUpdatedData] = useState({
     status: '',
@@ -59,12 +57,18 @@ export default function RequestDetails({ request, onUpdateRequest }: RequestDeta
   const handleUpdate = async () => {
     setIsUpdating(true)
     try {
-      const { error } = await supabase
-        .from('ijazah_applications')
-        .update(updatedData)
-        .eq('id', request.id)
+      const res = await fetch('/api/admin/requests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: request.id,
+          status: updatedData.status,
+          adminNotes: updatedData.admin_notes,
+          scholarId: updatedData.scholar_id,
+        }),
+      })
 
-      if (error) throw error
+      if (!res.ok) throw new Error('Failed to update request')
 
       onUpdateRequest()
     } catch (error) {

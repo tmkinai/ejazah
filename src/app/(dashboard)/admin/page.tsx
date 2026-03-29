@@ -2,10 +2,10 @@
 
 import { useState, useEffect, Suspense, lazy } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Loader2, ShieldAlert, Settings, TrendingUp, UserCircle, FolderKanban, LayoutDashboard, ClipboardList, Users, FileCheck, Plus, BookOpen, BookMarked } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
 import AdminSidebar from '@/components/admin/AdminSidebar'
 
 // Lazy load heavy components
@@ -18,31 +18,28 @@ const SettingsPanel = lazy(() => import('@/components/admin/SettingsPanel'))
 
 export default function AdminDashboard() {
   const router = useRouter()
-  const supabase = createClient()
+  const { data: session, status: sessionStatus } = useSession()
   const [authStatus, setAuthStatus] = useState<'loading' | 'authorized' | 'unauthorized'>('loading')
   const [activeSection, setActiveSection] = useState('overview')
   const [settings, setSettings] = useState(null)
 
   useEffect(() => {
+    if (sessionStatus === 'loading') return
     checkAuthAndLoadSettings()
-  }, [])
+  }, [sessionStatus])
 
   const checkAuthAndLoadSettings = async () => {
     try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      
-      if (userError || !user) {
+      if (!session?.user) {
         setAuthStatus('unauthorized')
         return
       }
 
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('roles')
-        .eq('id', user.id)
-        .single()
+      const res = await fetch('/api/profiles')
+      const result = await res.json()
+      const profile = result.data
 
-      if (profileError || !profile?.roles?.includes('admin')) {
+      if (!profile?.roles?.includes('admin')) {
         setAuthStatus('unauthorized')
         return
       }
@@ -57,14 +54,10 @@ export default function AdminDashboard() {
 
   const loadSettings = async () => {
     try {
-      const { data, error } = await supabase
-        .from('app_settings')
-        .select('*')
-        .limit(1)
-        .single()
-
-      if (!error && data) {
-        setSettings(data)
+      const res = await fetch('/api/admin/settings')
+      const result = await res.json()
+      if (result.data) {
+        setSettings(result.data)
       }
     } catch (error) {
       console.error('Error loading settings:', error)
@@ -295,7 +288,6 @@ function LoadingSpinner() {
 
 // Biography Editor Component
 function BiographyEditor() {
-  const supabase = createClient()
   const [biography, setBiography] = useState('')
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -306,14 +298,11 @@ function BiographyEditor() {
 
   const loadBiography = async () => {
     try {
-      const { data } = await supabase
-        .from('app_settings')
-        .select('biography_text')
-        .limit(1)
-        .single()
-      
-      if (data?.biography_text) {
-        setBiography(data.biography_text)
+      const res = await fetch('/api/biographies')
+      const result = await res.json()
+
+      if (result.data?.biography_text) {
+        setBiography(result.data.biography_text)
       }
     } catch (error) {
       console.error('Error loading biography:', error)
@@ -325,12 +314,12 @@ function BiographyEditor() {
   const saveBiography = async () => {
     setSaving(true)
     try {
-      const { error } = await supabase
-        .from('app_settings')
-        .update({ biography_text: biography, updated_at: new Date().toISOString() })
-        .not('id', 'is', null)
-      
-      if (error) throw error
+      const res = await fetch('/api/biographies', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ biography_text: biography }),
+      })
+      if (!res.ok) throw new Error('Failed to save')
       alert('تم حفظ السيرة الذاتية بنجاح')
     } catch (error) {
       console.error('Error saving biography:', error)
@@ -373,7 +362,6 @@ function BiographyEditor() {
 
 // Media Library Component
 function MediaLibrary() {
-  const supabase = createClient()
   const [files, setFiles] = useState<any[]>([])
   const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -384,12 +372,10 @@ function MediaLibrary() {
 
   const loadFiles = async () => {
     try {
-      const { data, error } = await supabase.storage
-        .from('media')
-        .list('library', { limit: 100, sortBy: { column: 'created_at', order: 'desc' } })
-      
-      if (!error && data) {
-        setFiles(data)
+      const res = await fetch('/api/upload?folder=library')
+      const result = await res.json()
+      if (result.data) {
+        setFiles(result.data)
       }
     } catch (error) {
       console.error('Error loading files:', error)
@@ -404,12 +390,15 @@ function MediaLibrary() {
 
     setUploading(true)
     try {
-      const fileName = `library/${Date.now()}_${file.name}`
-      const { error } = await supabase.storage
-        .from('media')
-        .upload(fileName, file)
-      
-      if (error) throw error
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('folder', 'library')
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      })
+      if (!res.ok) throw new Error('Upload failed')
       await loadFiles()
     } catch (error) {
       console.error('Error uploading file:', error)
@@ -421,13 +410,12 @@ function MediaLibrary() {
 
   const deleteFile = async (name: string) => {
     if (!confirm('هل أنت متأكد من حذف هذا الملف؟')) return
-    
+
     try {
-      const { error } = await supabase.storage
-        .from('media')
-        .remove([`library/${name}`])
-      
-      if (error) throw error
+      const res = await fetch(`/api/upload?file=library/${name}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) throw new Error('Delete failed')
       await loadFiles()
     } catch (error) {
       console.error('Error deleting file:', error)
@@ -435,8 +423,7 @@ function MediaLibrary() {
   }
 
   const getPublicUrl = (name: string) => {
-    const { data } = supabase.storage.from('media').getPublicUrl(`library/${name}`)
-    return data.publicUrl
+    return `/uploads/library/${name}`
   }
 
   if (loading) return <LoadingSpinner />
@@ -489,7 +476,6 @@ function MediaLibrary() {
 
 // Fatiha Applications Component
 function FatihaApplications() {
-  const supabase = createClient()
   const router = useRouter()
   const [applications, setApplications] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -500,17 +486,10 @@ function FatihaApplications() {
 
   const loadApplications = async () => {
     try {
-      const { data, error } = await supabase
-        .from('ijazah_applications')
-        .select(`
-          *,
-          profiles!ijazah_applications_user_id_fkey (full_name, email)
-        `)
-        .eq('ijazah_type', 'fatiha')
-        .order('created_at', { ascending: false })
-      
-      if (!error && data) {
-        setApplications(data)
+      const res = await fetch('/api/admin/requests?type=fatiha')
+      const result = await res.json()
+      if (result.data) {
+        setApplications(result.data)
       }
     } catch (error) {
       console.error('Error loading fatiha applications:', error)

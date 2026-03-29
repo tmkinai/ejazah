@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -22,29 +22,23 @@ interface Certificate {
 
 export default function MyCertificatesPage() {
   const router = useRouter()
-  const supabase = createClient()
+  const { data: session, status: sessionStatus } = useSession()
   const [loading, setLoading] = useState(true)
   const [certificates, setCertificates] = useState<Certificate[]>([])
 
   useEffect(() => {
+    if (sessionStatus === 'loading') return
+    if (!session?.user) {
+      router.push('/auth/login')
+      return
+    }
+
     async function loadCertificates() {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) {
-          router.push('/auth/login')
-          return
-        }
-
-        // Fetch user's certificates
-        const { data, error } = await supabase
-          .from('ijazah_certificates')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('issue_date', { ascending: false })
-
-        if (error) throw error
-
-        setCertificates(data || [])
+        const res = await fetch('/api/admin/certificates?scholarId=mine')
+        const result = await res.json()
+        if (!res.ok) throw new Error(result.error)
+        setCertificates(result.data || [])
       } catch (error) {
         console.error('Error loading certificates:', error)
       } finally {
@@ -53,7 +47,7 @@ export default function MyCertificatesPage() {
     }
 
     loadCertificates()
-  }, [router, supabase])
+  }, [router, sessionStatus, session])
 
   const getIjazahTypeLabel = (type: string) => {
     const typeMap: Record<string, string> = {

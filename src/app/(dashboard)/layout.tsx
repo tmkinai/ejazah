@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import DashboardHeader from '@/components/shared/DashboardHeader'
 
 export default function DashboardLayout({
@@ -9,7 +8,6 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  const supabase = createClient()
   const [appSettings, setAppSettings] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
@@ -19,11 +17,9 @@ export default function DashboardLayout({
 
   const loadSettings = async () => {
     try {
-      const { data } = await supabase
-        .from('app_settings')
-        .select('*')
-        .limit(1)
-        .single()
+      const res = await fetch('/api/admin/settings')
+      if (!res.ok) throw new Error('Failed to load settings')
+      const data = await res.json()
 
       if (data) {
         setAppSettings(data)
@@ -43,15 +39,15 @@ export default function DashboardLayout({
     <div className="min-h-screen bg-gradient-to-b from-amber-50/50 to-white flex flex-col" dir="rtl">
       <style dangerouslySetInnerHTML={{ __html: `
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=Noto+Naskh+Arabic:wght@400;500;600;700&display=swap');
-        
+
         :root {
           --primary-color: ${primaryColor};
         }
-        
+
         .font-arabic {
           font-family: 'Noto Naskh Arabic', serif !important;
         }
-        
+
         .font-ui {
           font-family: 'IBM Plex Sans Arabic', sans-serif !important;
         }
@@ -63,7 +59,7 @@ export default function DashboardLayout({
         {children}
       </main>
 
-      <footer 
+      <footer
         className="text-white py-4 mt-auto"
         style={{ backgroundColor: primaryColor }}
       >

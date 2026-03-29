@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
-import { createClient } from '@/lib/supabase/client'
 import { Book, Users, Calendar, Award, Bookmark, FileText, Loader2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ar } from 'date-fns/locale'
@@ -20,7 +19,6 @@ interface Stats {
 
 export default function StatsOverview() {
   const router = useRouter()
-  const supabase = createClient()
   const [stats, setStats] = useState<Stats>({
     total: 0,
     thisMonth: 0,
@@ -36,16 +34,14 @@ export default function StatsOverview() {
 
   const calculateStats = async () => {
     try {
-      const { data: ijazat, error } = await supabase
-        .from('ijazah_certificates')
-        .select('*')
-        .order('created_at', { ascending: false })
+      const res = await fetch('/api/admin/certificates')
+      if (!res.ok) throw new Error('Failed to fetch certificates')
 
-      if (error) throw error
+      const { data: ijazat } = await res.json()
 
       const now = new Date()
       const thisMonth = ijazat?.filter((ijazah: any) => {
-        const ijazahDate = new Date(ijazah.created_at)
+        const ijazahDate = new Date(ijazah.created_at || ijazah.createdAt)
         return (
           ijazahDate.getMonth() === now.getMonth() &&
           ijazahDate.getFullYear() === now.getFullYear()
@@ -53,11 +49,11 @@ export default function StatsOverview() {
       }) || []
 
       const uniqueStudents = new Set(
-        ijazat?.map((i: any) => i.student_id) || []
+        ijazat?.map((i: any) => i.student_id || i.studentId) || []
       ).size
 
       const narrationTypes = (ijazat || []).reduce((acc: Record<string, number>, ijazah: any) => {
-        const type = ijazah.narration_type || 'غير محدد'
+        const type = ijazah.narration_type || ijazah.narrationType || 'غير محدد'
         acc[type] = (acc[type] || 0) + 1
         return acc
       }, {})
@@ -200,14 +196,14 @@ export default function StatsOverview() {
                       <div className="flex items-center gap-3">
                         <FileText className="w-5 h-5 text-amber-600" />
                         <div>
-                          <div className="font-semibold">{ijazah.student_name || 'غير محدد'}</div>
+                          <div className="font-semibold">{ijazah.student_name || ijazah.studentName || 'غير محدد'}</div>
                           <div className="text-sm text-muted-foreground">
-                            {ijazah.narration_type || 'غير محدد'}
+                            {ijazah.narration_type || ijazah.narrationType || 'غير محدد'}
                           </div>
                         </div>
                       </div>
                       <div className="text-sm text-muted-foreground">
-                        {format(new Date(ijazah.created_at), 'yyyy/MM/dd', { locale: ar })}
+                        {format(new Date(ijazah.created_at || ijazah.createdAt), 'yyyy/MM/dd', { locale: ar })}
                       </div>
                     </div>
                   </div>

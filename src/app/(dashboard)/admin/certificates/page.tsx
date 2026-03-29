@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -30,60 +30,42 @@ interface Certificate {
 
 export default function AdminCertificatesPage() {
   const router = useRouter()
-  const supabase = createClient()
+  const { data: session, status: sessionStatus } = useSession()
   const [loading, setLoading] = useState(true)
   const [certificates, setCertificates] = useState<Certificate[]>([])
 
   useEffect(() => {
+    if (sessionStatus === 'loading') return
+    if (!session?.user) {
+      router.push('/auth/login')
+      return
+    }
+
     async function loadData() {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) {
-          router.push('/auth/login')
-          return
-        }
+        const res = await fetch('/api/admin/certificates')
+        const result = await res.json()
+        if (!res.ok) throw new Error(result.error)
 
-        // Fetch all certificates (admin can see all via RLS)
-        const { data: certsData, error } = await supabase
-          .from('ijazah_certificates')
-          .select(`
-            id,
-            certificate_number,
-            ijazah_type,
-            status,
-            issue_date,
-            verification_count,
-            profiles:user_id (
-              full_name,
-              email
-            ),
-            scholars:scholar_id (
-              profiles:id (
-                full_name
-              )
-            )
-          `)
-          .order('issue_date', { ascending: false })
+        const certsData = result.data || []
 
-        if (error) throw error
-
-        const transformedCerts = certsData?.map((cert: any) => ({
+        const transformedCerts = certsData.map((cert: any) => ({
           id: cert.id,
-          certificate_number: cert.certificate_number,
-          ijazah_type: cert.ijazah_type,
+          certificate_number: cert.certificate_number || cert.certificateNumber,
+          ijazah_type: cert.ijazah_type || cert.ijazahType,
           status: cert.status,
-          issue_date: cert.issue_date,
-          verification_count: cert.verification_count || 0,
+          issue_date: cert.issue_date || cert.issueDate,
+          verification_count: cert.verification_count || cert.verificationCount || 0,
           user: {
-            full_name: cert.profiles?.full_name || 'Unknown',
-            email: cert.profiles?.email || '',
+            full_name: cert.user?.full_name || cert.profiles?.full_name || 'Unknown',
+            email: cert.user?.email || cert.profiles?.email || '',
           },
-          scholar: cert.scholars ? {
+          scholar: cert.scholar ? {
             profile: {
-              full_name: cert.scholars.profiles?.full_name || 'Unknown'
+              full_name: cert.scholar.profile?.full_name || cert.scholar.profiles?.full_name || 'Unknown'
             }
           } : null,
-        })) || []
+        }))
 
         setCertificates(transformedCerts)
       } catch (error) {
@@ -94,7 +76,7 @@ export default function AdminCertificatesPage() {
     }
 
     loadData()
-  }, [router, supabase])
+  }, [router, sessionStatus, session])
 
   const getStatusBadge = (status: string) => {
     const statusMap: Record<string, { label: string; className: string }> = {

@@ -1,32 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { auth } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+import { parseRoles } from '@/lib/auth-utils'
 import QRCode from 'qrcode'
+
+// Helper to generate certificate number
+function generateCertificateNumber(ijazahType: string): string {
+  const prefix = ijazahType.toUpperCase().substring(0, 3)
+  const year = new Date().getFullYear()
+  const random = Math.random().toString(36).substring(2, 8).toUpperCase()
+  return `${prefix}-${year}-${random}`
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient()
-
-    // Check authentication
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
+    const session = await auth()
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     // Check if user is scholar or admin
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('roles')
-      .eq('id', user.id)
-      .single()
-
-    const isScholar = profile?.roles?.includes('scholar')
-    const isAdmin = profile?.roles?.includes('admin')
-
-    if (!isScholar && !isAdmin) {
+    const profile = await prisma.profile.findUnique({
+      where: { id: session.user.id },
+      select: { roles: true },
+    })
+    const roles = parseRoles(profile?.roles)
+    if (!roles.includes('scholar') && !roles.includes('admin')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Parse request body
     const body = await request.json()
     const { application_id } = body
 
@@ -34,131 +36,87 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Application ID is required' }, { status: 400 })
     }
 
-    // Fetch application details
-    const { data: application, error: appError } = await supabase
-      .from('ijazah_applications')
-      .select(`
-        *,
-        profiles:user_id (
-          id,
-          full_name,
-          full_name_arabic,
-          email
-        ),
-        scholars:scholar_id (
-          id,
-          specialization,
-          sanad_chain,
-          profiles:id (
-            full_name,
-            full_name_arabic
-          )
-        )
-      `)
-      .eq('id', application_id)
-      .eq('status', 'approved')
-      .single()
+    // Fetch application with related data
+    const application = await prisma.ijazahApplication.findFirst({
+      where: { id: application_id, status: 'approved' },
+      include: {
+        userProfile: {
+          select: { id: true, fullName: true, fullNameArabic: true, email: true },
+        },
+        scholar: {
+          include: {
+            profile: {
+              select: { fullName: true, fullNameArabic: true },
+            },
+          },
+        },
+      },
+    })
 
-    if (appError || !application) {
+    if (!application) {
       return NextResponse.json({ error: 'Application not found or not approved' }, { status: 404 })
     }
 
     // Check if certificate already exists
-    const { data: existingCert } = await supabase
-      .from('ijazah_certificates')
-      .select('id, certificate_number')
-      .eq('application_id', application_id)
-      .single()
+    const existingCert = await prisma.ijazahCertificate.findFirst({
+      where: { applicationId: application_id },
+      select: { id: true, certificateNumber: true },
+    })
 
     if (existingCert) {
       return NextResponse.json({
         message: 'Certificate already exists',
-        certificate_number: existingCert.certificate_number,
+        certificate_number: existingCert.certificateNumber,
         certificate_id: existingCert.id,
       })
     }
 
-    // Generate certificate number
-    const { data: certNumberData, error: certNumberError } = await supabase
-      .rpc('generate_certificate_number', { ijazah_type_param: application.ijazah_type })
-
-    if (certNumberError) {
-      console.error('Error generating certificate number:', certNumberError)
-      return NextResponse.json({ error: 'Failed to generate certificate number' }, { status: 500 })
-    }
-
-    const certificateNumber = certNumberData
-
-    // Generate verification hash
+    const certificateNumber = generateCertificateNumber(application.ijazahType)
     const verificationHash = `${certificateNumber}-${Date.now()}-${Math.random().toString(36).substring(7)}`
 
     // Generate QR code
-    const verificationUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://ijazah.app'}/verify/${certificateNumber}`
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ijazah.app'
+    const verificationUrl = `${appUrl}/verify/${certificateNumber}`
     const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl, {
       errorCorrectionLevel: 'H',
       type: 'image/png',
       width: 400,
       margin: 1,
-      color: {
-        dark: '#1B4332',
-        light: '#FFFFFF',
+      color: { dark: '#1B4332', light: '#FFFFFF' },
+    })
+
+    // Extract quranExperience safely
+    const quranExp = application.quranExperience as Record<string, any> | null
+
+    // Create certificate
+    const certificate = await prisma.ijazahCertificate.create({
+      data: {
+        applicationId: application.id,
+        userId: application.userId,
+        scholarId: application.scholarId,
+        certificateNumber,
+        ijazahType: application.ijazahType,
+        status: 'active',
+        recitation: quranExp?.recitation || null,
+        memorializationLevel: quranExp?.memorization_level || null,
+        sanadChain: application.scholar?.sanadChain || {},
+        issueDate: new Date().toISOString().split('T')[0],
+        qrCodeData: qrCodeDataUrl,
+        qrCodeUrl: qrCodeDataUrl,
+        verificationHash,
+        metadata: {
+          issued_by: session.user.id,
+          issued_at: new Date().toISOString(),
+        },
       },
     })
 
-    // Create certificate record
-    const { data: certificate, error: certError } = await supabase
-      .from('ijazah_certificates')
-      .insert({
-        application_id: application.id,
-        user_id: application.user_id,
-        scholar_id: application.scholar_id,
-        certificate_number: certificateNumber,
-        ijazah_type: application.ijazah_type,
-        status: 'active',
-        recitation: application.quran_experience?.recitation || null,
-        memorization_level: application.quran_experience?.memorization_level || null,
-        sanad_chain: (application as any).scholars?.sanad_chain || {},
-        issue_date: new Date().toISOString().split('T')[0],
-        qr_code_data: qrCodeDataUrl,
-        qr_code_url: qrCodeDataUrl,
-        verification_hash: verificationHash,
-        metadata: {
-          issued_by: user.id,
-          issued_at: new Date().toISOString(),
-        },
+    // Increment scholar's total ijazat issued
+    if (application.scholarId) {
+      await prisma.scholar.update({
+        where: { id: application.scholarId },
+        data: { totalIjazatIssued: { increment: 1 } },
       })
-      .select()
-      .single()
-
-    if (certError) {
-      console.error('Error creating certificate:', certError)
-      return NextResponse.json({ error: 'Failed to create certificate' }, { status: 500 })
-    }
-
-    // Update scholar's total ijazat issued count
-    if (application.scholar_id) {
-      // Increment scholar's total ijazat issued count
-      const { error: rpcError } = await supabase.rpc('increment', {
-        table_name: 'scholars',
-        id_val: application.scholar_id,
-        column_name: 'total_ijazat_issued',
-      })
-
-      if (rpcError) {
-        // Manual update if RPC fails
-        const { data: scholarData } = await supabase
-          .from('scholars')
-          .select('total_ijazat_issued')
-          .eq('id', application.scholar_id)
-          .single()
-
-        if (scholarData) {
-          await supabase
-            .from('scholars')
-            .update({ total_ijazat_issued: (scholarData.total_ijazat_issued || 0) + 1 })
-            .eq('id', application.scholar_id)
-        }
-      }
     }
 
     return NextResponse.json({
@@ -166,8 +124,8 @@ export async function POST(request: NextRequest) {
       message: 'Certificate generated successfully',
       certificate: {
         id: certificate.id,
-        certificate_number: certificate.certificate_number,
-        qr_code_url: certificate.qr_code_url,
+        certificate_number: certificate.certificateNumber,
+        qr_code_url: certificate.qrCodeUrl,
         verification_url: verificationUrl,
       },
     })

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -26,7 +26,7 @@ interface NotificationPreferences {
 }
 
 export default function NotificationSettingsPage() {
-  const supabase = createClient()
+  const { data: session } = useSession()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [preferences, setPreferences] = useState<NotificationPreferences>({
@@ -50,21 +50,11 @@ export default function NotificationSettingsPage() {
 
   async function loadPreferences() {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      const res = await fetch('/api/notifications')
+      const result = await res.json()
 
-      const { data, error } = await supabase
-        .from('notification_preferences')
-        .select('*')
-        .eq('user_id', user.id)
-        .single()
-
-      if (error && error.code !== 'PGRST116') {
-        throw error
-      }
-
-      if (data) {
-        setPreferences(data)
+      if (result.data?.preferences) {
+        setPreferences(result.data.preferences)
       }
     } catch (error) {
       console.error('Error loading preferences:', error)
@@ -76,17 +66,13 @@ export default function NotificationSettingsPage() {
   async function savePreferences() {
     setSaving(true)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { error } = await supabase
-        .from('notification_preferences')
-        .upsert({
-          user_id: user.id,
-          ...preferences,
-        })
-
-      if (error) throw error
+      const res = await fetch('/api/notifications/mark-read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save_preferences', preferences }),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error)
 
       toast({
         title: 'تم الحفظ بنجاح',

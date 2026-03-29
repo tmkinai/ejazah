@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
-import { createClient } from '@/lib/supabase/client'
 import { Loader2, Upload, CheckCircle } from 'lucide-react'
 
 interface SubmissionFormProps {
@@ -16,7 +15,6 @@ interface SubmissionFormProps {
 }
 
 export default function SubmissionForm({ requestId, studentEmail, onSuccess }: SubmissionFormProps) {
-  const supabase = createClient()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [audioFile, setAudioFile] = useState<File | null>(null)
   const [studentNotes, setStudentNotes] = useState('')
@@ -30,35 +28,36 @@ export default function SubmissionForm({ requestId, studentEmail, onSuccess }: S
 
       // Upload audio file if provided
       if (audioFile) {
-        const fileExt = audioFile.name.split('.').pop()
-        const fileName = `${Date.now()}.${fileExt}`
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('submissions')
-          .upload(`${requestId}/${fileName}`, audioFile)
+        const formData = new FormData()
+        formData.append('file', audioFile)
+        formData.append('bucket', 'submissions')
 
-        if (uploadError) throw uploadError
+        const uploadRes = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        })
 
-        const { data: { publicUrl } } = supabase.storage
-          .from('submissions')
-          .getPublicUrl(uploadData.path)
+        if (!uploadRes.ok) throw new Error('Upload failed')
 
-        audioUrl = publicUrl
+        const uploadData = await uploadRes.json()
+        audioUrl = uploadData.url
       }
 
       // Create submission record
-      const { data, error } = await supabase
-        .from('submissions')
-        .insert({
-          request_id: requestId,
-          student_email: studentEmail,
-          audio_url: audioUrl,
-          student_notes: studentNotes,
-        })
-        .select()
-        .single()
+      const res = await fetch('/api/submissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requestId,
+          studentEmail,
+          audioUrl,
+          studentNotes,
+        }),
+      })
 
-      if (error) throw error
+      if (!res.ok) throw new Error('Submission failed')
 
+      const data = await res.json()
       onSuccess(data)
       setAudioFile(null)
       setStudentNotes('')

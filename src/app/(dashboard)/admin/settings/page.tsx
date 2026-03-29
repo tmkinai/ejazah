@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -75,7 +75,7 @@ const READINGS_HIERARCHY = [
 const PARENT_READINGS = READINGS_HIERARCHY.map(item => item.reading)
 
 export default function AdminSettingsPage() {
-  const supabase = createClient()
+  const { data: session } = useSession()
   const { toast } = useToast()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -104,18 +104,11 @@ export default function AdminSettingsPage() {
   const loadData = async () => {
     try {
       // Load settings
-      const { data: settingsData, error: settingsError } = await supabase
-        .from('app_settings')
-        .select('*')
-        .limit(1)
-        .single()
+      const settingsRes = await fetch('/api/admin/settings')
+      const settingsResult = await settingsRes.json()
 
-      if (settingsError && settingsError.code !== 'PGRST116') {
-        console.error('Error loading settings:', settingsError)
-      }
-
-      if (settingsData) {
-        setSettings(settingsData)
+      if (settingsResult.data) {
+        setSettings(settingsResult.data)
       } else {
         // Create default settings
         setSettings(getDefaultSettings())
@@ -131,13 +124,14 @@ export default function AdminSettingsPage() {
   }
 
   const loadNarrationTypes = async () => {
-    const { data } = await supabase
-      .from('narration_types')
-      .select('*')
-      .order('display_order', { ascending: true })
-
-    if (data) {
-      setNarrationTypes(data)
+    try {
+      const res = await fetch('/api/admin/settings?section=narrations')
+      const result = await res.json()
+      if (result.data) {
+        setNarrationTypes(result.data)
+      }
+    } catch (error) {
+      console.error('Error loading narration types:', error)
     }
   }
 
@@ -180,25 +174,15 @@ export default function AdminSettingsPage() {
     try {
       setSaving(true)
 
-      if (settings.id) {
-        // Update existing
-        const { error } = await supabase
-          .from('app_settings')
-          .update({ ...settings, updated_at: new Date().toISOString() })
-          .eq('id', settings.id)
+      const res = await fetch('/api/admin/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error)
 
-        if (error) throw error
-      } else {
-        // Create new
-        const { data, error } = await supabase
-          .from('app_settings')
-          .insert([settings])
-          .select()
-          .single()
-
-        if (error) throw error
-        if (data) setSettings(data)
-      }
+      if (result.data) setSettings(result.data)
 
       toast({
         title: 'تم الحفظ',
@@ -219,7 +203,7 @@ export default function AdminSettingsPage() {
   const handleFileUpload = async (file: File, type: string) => {
     if (!file) return
 
-    const uploadKey = type === 'signature' ? 'uploadingSignature' 
+    const uploadKey = type === 'signature' ? 'uploadingSignature'
       : type === 'secondSignature' ? 'uploadingSecondSignature'
       : type === 'background' ? 'uploadingBackground'
       : 'uploadingFont'
@@ -227,19 +211,19 @@ export default function AdminSettingsPage() {
     setUploadingState(prev => ({ ...prev, [uploadKey]: true }))
 
     try {
-      const fileExt = file.name.split('.').pop()
-      const fileName = `${type}_${Date.now()}.${fileExt}`
-      const filePath = `settings/${fileName}`
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('folder', 'settings')
+      formData.append('type', type)
 
-      const { error: uploadError } = await supabase.storage
-        .from('media')
-        .upload(filePath, file)
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error)
 
-      if (uploadError) throw uploadError
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('media')
-        .getPublicUrl(filePath)
+      const publicUrl = result.data?.url || result.url
 
       const fieldMap: Record<string, string> = {
         signature: 'signature_image_url',
@@ -278,11 +262,12 @@ export default function AdminSettingsPage() {
     }
 
     try {
-      const { error } = await supabase
-        .from('narration_types')
-        .insert([{ ...newNarrationType, active: true }])
-
-      if (error) throw error
+      const res = await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'add_narration', ...newNarrationType, active: true }),
+      })
+      if (!res.ok) throw new Error('Failed to add')
 
       setNewNarrationType({ name: '', parent_reading: '', description: '' })
       await loadNarrationTypes()
@@ -303,12 +288,12 @@ export default function AdminSettingsPage() {
 
   const handleToggleNarrationType = async (id: string, active: boolean) => {
     try {
-      const { error } = await supabase
-        .from('narration_types')
-        .update({ active: !active })
-        .eq('id', id)
-
-      if (error) throw error
+      const res = await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'toggle_narration', id, active: !active }),
+      })
+      if (!res.ok) throw new Error('Failed to toggle')
       await loadNarrationTypes()
     } catch (error) {
       console.error('Error toggling narration type:', error)
@@ -319,16 +304,18 @@ export default function AdminSettingsPage() {
     if (!editingNarration) return
 
     try {
-      const { error } = await supabase
-        .from('narration_types')
-        .update({
+      const res = await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update_narration',
+          id: editingNarration.id,
           name: editingNarration.name,
           parent_reading: editingNarration.parent_reading,
           description: editingNarration.description,
-        })
-        .eq('id', editingNarration.id)
-
-      if (error) throw error
+        }),
+      })
+      if (!res.ok) throw new Error('Failed to update')
 
       await loadNarrationTypes()
       setIsEditDialogOpen(false)
@@ -352,12 +339,12 @@ export default function AdminSettingsPage() {
     if (!deletingNarrationId) return
 
     try {
-      const { error } = await supabase
-        .from('narration_types')
-        .delete()
-        .eq('id', deletingNarrationId)
-
-      if (error) throw error
+      const res = await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete_narration', id: deletingNarrationId }),
+      })
+      if (!res.ok) throw new Error('Failed to delete')
 
       await loadNarrationTypes()
       setDeleteDialogOpen(false)
@@ -381,9 +368,6 @@ export default function AdminSettingsPage() {
     setIsResetting(true)
 
     try {
-      // Delete all existing
-      await supabase.from('narration_types').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-
       // Create new structured list
       const newNarrations = READINGS_HIERARCHY.flatMap((item, readingIndex) =>
         item.narrators.map((narratorName, narratorIndex) => ({
@@ -394,9 +378,13 @@ export default function AdminSettingsPage() {
         }))
       )
 
-      const { error } = await supabase
-        .from('narration_types')
-        .insert(newNarrations)
+      const res = await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reset_narrations', narrations: newNarrations }),
+      })
+
+      if (!res.ok) throw new Error('Failed to reset')
 
       if (error) throw error
 

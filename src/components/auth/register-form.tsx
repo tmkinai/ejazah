@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/client'
+import { signIn } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -45,7 +45,6 @@ type RegisterFormData = z.infer<typeof registerSchema>
 
 export function RegisterForm() {
   const router = useRouter()
-  const supabase = createClient()
   const [loading, setLoading] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -64,39 +63,39 @@ export function RegisterForm() {
     setSuccessMessage(null)
 
     try {
-      const { data: authData, error } = await supabase.auth.signUp({
-        email: data.email,
-        password: data.password,
-        options: {
-          data: {
-            full_name: data.fullName,
-            phone: data.phone,
-          },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
+      // Register via API route
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: data.email,
+          password: data.password,
+          fullName: data.fullName,
+          phoneNumber: data.phone,
+        }),
       })
 
-      if (error) {
-        // Translate common Supabase errors
-        if (error.message.includes('already registered')) {
-          setServerError('هذا البريد الإلكتروني مسجل بالفعل')
-        } else if (error.message.includes('password')) {
-          setServerError('كلمة المرور ضعيفة جداً')
-        } else {
-          setServerError(error.message)
-        }
+      const result = await res.json()
+
+      if (!res.ok) {
+        setServerError(result.error || 'حدث خطأ غير متوقع')
         setLoading(false)
         return
       }
 
-      // Check if email confirmation is required
-      if (authData.user && !authData.session) {
-        setSuccessMessage('تم إنشاء الحساب! يرجى التحقق من بريدك الإلكتروني لتأكيد الحساب.')
+      // Auto-login after registration
+      const signInResult = await signIn('credentials', {
+        email: data.email,
+        password: data.password,
+        redirect: false,
+      })
+
+      if (signInResult?.error) {
+        setSuccessMessage('تم إنشاء الحساب! يرجى تسجيل الدخول.')
         setLoading(false)
         return
       }
 
-      // If session exists, redirect to dashboard
       router.push('/dashboard')
       router.refresh()
     } catch (err) {
@@ -108,15 +107,10 @@ export function RegisterForm() {
   const handleGoogleRegister = async () => {
     setLoading(true)
     setServerError(null)
-    
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    })
 
-    if (error) {
+    try {
+      await signIn('google', { callbackUrl: '/dashboard' })
+    } catch (error) {
       setServerError('فشل الاتصال بـ Google. يرجى المحاولة مرة أخرى.')
       setLoading(false)
     }

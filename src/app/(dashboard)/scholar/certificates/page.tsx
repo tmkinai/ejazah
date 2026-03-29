@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,7 +21,7 @@ interface Certificate {
 }
 
 export default function ScholarCertificatesPage() {
-  const supabase = createClient()
+  const { data: session, status: sessionStatus } = useSession()
   const [loading, setLoading] = useState(true)
   const [certificates, setCertificates] = useState<Certificate[]>([])
   const [searchTerm, setSearchTerm] = useState('')
@@ -32,39 +32,27 @@ export default function ScholarCertificatesPage() {
   })
 
   useEffect(() => {
+    if (sessionStatus === 'loading') return
+    if (!session) return
     loadCertificates()
-  }, [])
+  }, [session, sessionStatus])
 
   const loadCertificates = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      const res = await fetch('/api/admin/certificates?scholarId=me')
+      if (!res.ok) return
+      const certificatesData = await res.json()
 
-      const { data: certificates } = await supabase
-        .from('ijazah_certificates')
-        .select(`
-          id,
-          certificate_number,
-          ijazah_type,
-          status,
-          issue_date,
-          profiles:user_id (
-            full_name
-          )
-        `)
-        .eq('scholar_id', user.id)
-        .order('issue_date', { ascending: false })
-
-      const transformed = certificates?.map((cert: any) => ({
+      const transformed = (certificatesData || []).map((cert: any) => ({
         id: cert.id,
-        certificate_number: cert.certificate_number,
-        ijazah_type: cert.ijazah_type,
+        certificate_number: cert.certificate_number || cert.certificateNumber,
+        ijazah_type: cert.ijazah_type || cert.ijazahType,
         status: cert.status,
-        issue_date: cert.issue_date,
+        issue_date: cert.issue_date || cert.issueDate,
         user: {
-          full_name: cert.profiles?.full_name || 'Unknown',
+          full_name: cert.user?.full_name || cert.user?.fullName || 'Unknown',
         },
-      })) || []
+      }))
 
       setCertificates(transformed)
 

@@ -2,19 +2,19 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { createClient } from '@/lib/supabase/client'
-import { 
-  Loader2, 
-  FileText, 
-  Award, 
-  PlusCircle, 
-  Clock, 
-  CheckCircle, 
+import {
+  Loader2,
+  FileText,
+  Award,
+  PlusCircle,
+  Clock,
+  CheckCircle,
   XCircle,
   ArrowLeft,
   Eye,
@@ -44,7 +44,8 @@ interface Certificate {
 
 export default function DashboardPage() {
   const router = useRouter()
-  const supabase = createClient()
+  const { data: session, status: sessionStatus } = useSession()
+  const user = session?.user
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState<any>(null)
   const [applications, setApplications] = useState<Application[]>([])
@@ -59,44 +60,38 @@ export default function DashboardPage() {
   })
 
   useEffect(() => {
+    if (sessionStatus === 'loading') return
+    if (!user) {
+      router.push('/auth/login')
+      return
+    }
     loadData()
-  }, [])
+  }, [sessionStatus, user])
 
   const loadData = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.push('/auth/login')
-        return
-      }
-
       // Load profile
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
+      const profileRes = await fetch('/api/profiles')
+      const profileResult = await profileRes.json()
+      const profileData = profileResult.data
 
       if (profileData) {
         setProfile(profileData)
-        
+
         // Check if user is a student (not scholar/admin) to show banner
         const roles = profileData.roles || ['student']
         const isStudent = !roles.includes('scholar') && !roles.includes('admin')
-        
+
         if (isStudent) {
           // Check if user has a pending scholar application
-          const { data: scholarApp } = await supabase
-            .from('scholar_applications')
-            .select('status')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single()
-          
-          if (scholarApp) {
-            setScholarApplicationStatus(scholarApp.status)
-            setShowScholarBanner(scholarApp.status === 'pending')
+          const scholarRes = await fetch('/api/scholar-applications')
+          const scholarResult = await scholarRes.json()
+          const scholarApps = scholarResult.data || []
+
+          if (scholarApps.length > 0) {
+            const latestApp = scholarApps[0]
+            setScholarApplicationStatus(latestApp.status)
+            setShowScholarBanner(latestApp.status === 'pending')
           } else {
             setShowScholarBanner(true)
           }
@@ -104,48 +99,33 @@ export default function DashboardPage() {
       }
 
       // Load recent applications
-      const { data: appsData, count: appsCount } = await supabase
-        .from('ijazah_applications')
-        .select('*', { count: 'exact' })
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(5)
+      const appsRes = await fetch('/api/admin/requests')
+      const appsResult = await appsRes.json()
+      const appsData = appsResult.data || []
 
-      if (appsData) {
-        setApplications(appsData)
-      }
+      setApplications(appsData.slice(0, 5))
 
-      // Count pending applications
-      const { count: pendingCount } = await supabase
-        .from('ijazah_applications')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .in('status', ['submitted', 'under_review', 'interview_scheduled'])
+      // Count pending and approved applications
+      const pendingCount = appsData.filter((a: Application) =>
+        ['submitted', 'under_review', 'interview_scheduled'].includes(a.status)
+      ).length
 
-      // Count approved applications
-      const { count: approvedCount } = await supabase
-        .from('ijazah_applications')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('status', 'approved')
+      const approvedCount = appsData.filter((a: Application) =>
+        a.status === 'approved'
+      ).length
 
       // Load certificates
-      const { data: certsData, count: certsCount } = await supabase
-        .from('ijazah_certificates')
-        .select('*', { count: 'exact' })
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(5)
+      const certsRes = await fetch('/api/admin/certificates?scholarId=mine')
+      const certsResult = await certsRes.json()
+      const certsData = certsResult.data || []
 
-      if (certsData) {
-        setCertificates(certsData)
-      }
+      setCertificates(certsData.slice(0, 5))
 
       setStats({
-        totalApplications: appsCount || 0,
-        pendingApplications: pendingCount || 0,
-        approvedApplications: approvedCount || 0,
-        totalCertificates: certsCount || 0,
+        totalApplications: appsData.length,
+        pendingApplications: pendingCount,
+        approvedApplications: approvedCount,
+        totalCertificates: certsData.length,
       })
     } catch (error) {
       console.error('Error loading data:', error)

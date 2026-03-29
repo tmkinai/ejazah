@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -31,49 +31,53 @@ interface StudentProfile {
 export default function StudentDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const supabase = createClient()
+  const { data: session, status: sessionStatus } = useSession()
   const [loading, setLoading] = useState(true)
   const [student, setStudent] = useState<StudentProfile | null>(null)
 
   useEffect(() => {
+    if (sessionStatus === 'loading') return
+    if (!session) {
+      router.push('/auth/login')
+      return
+    }
     loadStudent()
-  }, [params.id])
+  }, [params.id, session, sessionStatus])
 
   const loadStudent = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.push('/auth/login')
+      // Fetch certificates issued by this scholar to this student
+      const res = await fetch(`/api/admin/certificates?scholarId=me&studentId=${params.id}`)
+      if (!res.ok) {
+        router.push('/scholar/students')
         return
       }
+      const certificates = await res.json()
 
-      // Fetch student profile
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', params.id)
-        .single()
-
-      if (!profile) {
+      if (!certificates || certificates.length === 0) {
         router.push('/scholar/students')
         return
       }
 
-      // Fetch certificates issued by this scholar to this student
-      const { data: certificates } = await supabase
-        .from('ijazah_certificates')
-        .select('*')
-        .eq('user_id', params.id)
-        .eq('scholar_id', user.id)
-        .order('issue_date', { ascending: false })
+      // Extract student info from the first certificate's user data
+      const firstCert = certificates[0]
+      const studentUser = firstCert.user || {}
 
       setStudent({
-        id: profile.id,
-        full_name: profile.full_name || 'Unknown',
-        email: profile.email || '',
-        phone_number: profile.phone_number,
-        created_at: profile.created_at,
-        certificates: certificates || [],
+        id: params.id as string,
+        full_name: studentUser.full_name || studentUser.fullName || 'Unknown',
+        email: studentUser.email || '',
+        phone_number: studentUser.phone_number || studentUser.phoneNumber,
+        created_at: studentUser.created_at || studentUser.createdAt || new Date().toISOString(),
+        certificates: certificates.map((cert: any) => ({
+          id: cert.id,
+          certificate_number: cert.certificate_number || cert.certificateNumber,
+          ijazah_type: cert.ijazah_type || cert.ijazahType,
+          status: cert.status,
+          issue_date: cert.issue_date || cert.issueDate,
+          recitation: cert.recitation,
+          memorization_level: cert.memorization_level || cert.memorizationLevel,
+        })),
       })
     } catch (error) {
       console.error('Error loading student:', error)

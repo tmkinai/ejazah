@@ -13,12 +13,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider'
 import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { 
-  Save, 
-  Loader2, 
-  Settings, 
-  Palette, 
-  FileText, 
+import {
+  Save,
+  Loader2,
+  Settings,
+  Palette,
+  FileText,
   BookOpen,
   Upload,
   X,
@@ -29,7 +29,6 @@ import {
   ExternalLink
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { createClient } from '@/lib/supabase/client'
 import {
   Dialog,
   DialogContent,
@@ -81,7 +80,6 @@ interface SettingsPanelProps {
 }
 
 export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPanelProps) {
-  const supabase = createClient()
   const { toast } = useToast()
   const [currentSettings, setCurrentSettings] = useState(settings || {})
   const [isSaving, setIsSaving] = useState(false)
@@ -110,13 +108,15 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
   }, [settings])
 
   const loadNarrationTypes = async () => {
-    const { data } = await supabase
-      .from('narration_types')
-      .select('*')
-      .order('display_order', { ascending: true })
-
-    if (data) {
-      setNarrationTypes(data)
+    try {
+      const res = await fetch('/api/admin/narration-types')
+      if (!res.ok) throw new Error('Failed to load narration types')
+      const data = await res.json()
+      if (data) {
+        setNarrationTypes(data)
+      }
+    } catch (error) {
+      console.error('Error loading narration types:', error)
     }
   }
 
@@ -127,19 +127,15 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
   const saveSettings = async () => {
     setIsSaving(true)
     try {
-      if (settings?.id) {
-        const { error } = await supabase
-          .from('app_settings')
-          .update({ ...currentSettings, updated_at: new Date().toISOString() })
-          .eq('id', settings.id)
+      const res = await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'app_settings', value: currentSettings }),
+      })
 
-        if (error) throw error
-      } else {
-        const { error } = await supabase
-          .from('app_settings')
-          .insert([currentSettings])
-
-        if (error) throw error
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to save settings')
       }
 
       toast({
@@ -162,7 +158,7 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
   const handleFileUpload = async (file: File, type: string) => {
     if (!file) return
 
-    const uploadKey = type === 'signature' ? 'uploadingSignature' 
+    const uploadKey = type === 'signature' ? 'uploadingSignature'
       : type === 'secondSignature' ? 'uploadingSecondSignature'
       : type === 'font' ? 'uploadingFont'
       : 'uploadingBackground'
@@ -170,19 +166,21 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
     setUploadingState(prev => ({ ...prev, [uploadKey]: true }))
 
     try {
-      const fileExt = file.name.split('.').pop()
-      const fileName = `${type}_${Date.now()}.${fileExt}`
-      const filePath = `settings/${fileName}`
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('folder', 'settings')
 
-      const { error: uploadError } = await supabase.storage
-        .from('media')
-        .upload(filePath, file)
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      })
 
-      if (uploadError) throw uploadError
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Upload failed')
+      }
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('media')
-        .getPublicUrl(filePath)
+      const { url: publicUrl } = await res.json()
 
       const fieldMap: Record<string, string> = {
         signature: 'signature_image_url',
@@ -221,11 +219,16 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
     }
 
     try {
-      const { error } = await supabase
-        .from('narration_types')
-        .insert([{ ...newNarrationType, active: true }])
+      const res = await fetch('/api/admin/narration-types', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...newNarrationType, active: true }),
+      })
 
-      if (error) throw error
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to add narration type')
+      }
 
       setNewNarrationType({ name: '', parent_reading: '', description: '' })
       await loadNarrationTypes()
@@ -243,12 +246,13 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
 
   const handleToggleNarrationType = async (id: string, active: boolean) => {
     try {
-      const { error } = await supabase
-        .from('narration_types')
-        .update({ active: !active })
-        .eq('id', id)
+      const res = await fetch('/api/admin/narration-types', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, active: !active }),
+      })
 
-      if (error) throw error
+      if (!res.ok) throw new Error('Failed to toggle narration type')
       await loadNarrationTypes()
     } catch (error) {
       console.error('Error toggling narration type:', error)
@@ -259,19 +263,16 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
     setIsResetting(true)
 
     try {
-      await supabase.from('narration_types').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+      const res = await fetch('/api/admin/narration-types/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hierarchy: READINGS_HIERARCHY }),
+      })
 
-      const newNarrations = READINGS_HIERARCHY.flatMap((item, readingIndex) =>
-        item.narrators.map((narratorName, narratorIndex) => ({
-          name: narratorName,
-          parent_reading: item.reading,
-          active: true,
-          display_order: readingIndex * 10 + narratorIndex,
-        }))
-      )
-
-      const { error } = await supabase.from('narration_types').insert(newNarrations)
-      if (error) throw error
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to reset narrations')
+      }
 
       await loadNarrationTypes()
       toast({ title: 'تم', description: 'تم إعادة تعيين قائمة الروايات بنجاح' })
@@ -328,9 +329,9 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
                 <p className="text-sm text-yellow-800 mt-2 font-arabic">
                   استخدم هذا الخيار لمسح القائمة الحالية وإنشاء قائمة جديدة ومنظمة للقراء العشرة ورواتهم العشرين.
                 </p>
-                <Button 
-                  variant="destructive" 
-                  className="mt-3 bg-yellow-600 hover:bg-yellow-700 font-arabic" 
+                <Button
+                  variant="destructive"
+                  className="mt-3 bg-yellow-600 hover:bg-yellow-700 font-arabic"
                   onClick={() => setResetDialogOpen(true)}
                 >
                   إعادة تعيين قائمة الروايات
@@ -343,8 +344,8 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label className="font-arabic">القراءة الأم</Label>
-                    <Select 
-                      value={newNarrationType.parent_reading} 
+                    <Select
+                      value={newNarrationType.parent_reading}
                       onValueChange={(value) => setNewNarrationType({ ...newNarrationType, parent_reading: value })}
                     >
                       <SelectTrigger><SelectValue placeholder="اختر القراءة" /></SelectTrigger>
@@ -357,15 +358,15 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
                   </div>
                   <div>
                     <Label className="font-arabic">اسم الراوي</Label>
-                    <Input 
-                      value={newNarrationType.name} 
-                      onChange={(e) => setNewNarrationType({ ...newNarrationType, name: e.target.value })} 
-                      placeholder="مثال: ورش" 
+                    <Input
+                      value={newNarrationType.name}
+                      onChange={(e) => setNewNarrationType({ ...newNarrationType, name: e.target.value })}
+                      placeholder="مثال: ورش"
                     />
                   </div>
                 </div>
-                <Button 
-                  onClick={handleAddNarrationType} 
+                <Button
+                  onClick={handleAddNarrationType}
                   disabled={!newNarrationType.name || !newNarrationType.parent_reading}
                   className="font-arabic bg-amber-600 hover:bg-amber-700"
                 >
@@ -392,9 +393,9 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
                               <div key={type.id} className="flex items-center justify-between p-2 border rounded-md">
                                 <div className="font-medium font-arabic">{type.name}</div>
                                 <div className="flex items-center gap-2">
-                                  <Switch 
-                                    checked={type.active} 
-                                    onCheckedChange={() => handleToggleNarrationType(type.id, type.active)} 
+                                  <Switch
+                                    checked={type.active}
+                                    onCheckedChange={() => handleToggleNarrationType(type.id, type.active)}
                                   />
                                 </div>
                               </div>
@@ -418,60 +419,60 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label className="font-arabic">نص ترويسة الشهادة</Label>
-                <Input 
-                  value={currentSettings.header_text || ''} 
-                  onChange={(e) => handleChange('header_text', e.target.value)} 
-                  placeholder="إجازة قرآنية" 
+                <Input
+                  value={currentSettings.header_text || ''}
+                  onChange={(e) => handleChange('header_text', e.target.value)}
+                  placeholder="إجازة قرآنية"
                 />
               </div>
               <div className="space-y-2">
                 <Label className="font-arabic">عنوان حقل الطالب</Label>
-                <Input 
-                  value={currentSettings.student_label || ''} 
-                  onChange={(e) => handleChange('student_label', e.target.value)} 
-                  placeholder="المجــــاز" 
+                <Input
+                  value={currentSettings.student_label || ''}
+                  onChange={(e) => handleChange('student_label', e.target.value)}
+                  placeholder="المجــــاز"
                 />
               </div>
               <div className="space-y-2">
                 <Label className="font-arabic">عنوان حقل الإجازة</Label>
-                <Input 
-                  value={currentSettings.narration_label || ''} 
-                  onChange={(e) => handleChange('narration_label', e.target.value)} 
-                  placeholder="الإجازة" 
+                <Input
+                  value={currentSettings.narration_label || ''}
+                  onChange={(e) => handleChange('narration_label', e.target.value)}
+                  placeholder="الإجازة"
                 />
               </div>
               <div className="space-y-2">
                 <Label className="font-arabic">نص توضيحي للإجازة (اختياري)</Label>
-                <Input 
-                  value={currentSettings.narration_description || ''} 
-                  onChange={(e) => handleChange('narration_description', e.target.value)} 
-                  placeholder="مثال: بجميع طرقها المتواترة..." 
+                <Input
+                  value={currentSettings.narration_description || ''}
+                  onChange={(e) => handleChange('narration_description', e.target.value)}
+                  placeholder="مثال: بجميع طرقها المتواترة..."
                 />
               </div>
               <div className="space-y-2">
                 <Label className="font-arabic">المقدمة الافتراضية</Label>
-                <Textarea 
-                  value={currentSettings.default_introduction || ''} 
-                  onChange={(e) => handleChange('default_introduction', e.target.value)} 
+                <Textarea
+                  value={currentSettings.default_introduction || ''}
+                  onChange={(e) => handleChange('default_introduction', e.target.value)}
                   rows={3}
-                  placeholder="بسم الله الرحمن الرحيم..." 
+                  placeholder="بسم الله الرحمن الرحيم..."
                 />
               </div>
               <div className="space-y-2">
                 <Label className="font-arabic">نص السند الافتراضي</Label>
-                <Textarea 
-                  value={currentSettings.default_sanad_text || ''} 
-                  onChange={(e) => handleChange('default_sanad_text', e.target.value)} 
+                <Textarea
+                  value={currentSettings.default_sanad_text || ''}
+                  onChange={(e) => handleChange('default_sanad_text', e.target.value)}
                   rows={6}
-                  placeholder="أجزت الطالب... بالسند المتصل..." 
+                  placeholder="أجزت الطالب... بالسند المتصل..."
                 />
               </div>
               <div className="space-y-2">
                 <Label className="font-arabic">مكان الإصدار الافتراضي</Label>
-                <Input 
-                  value={currentSettings.default_issue_place || ''} 
-                  onChange={(e) => handleChange('default_issue_place', e.target.value)} 
-                  placeholder="المملكة العربية السعودية" 
+                <Input
+                  value={currentSettings.default_issue_place || ''}
+                  onChange={(e) => handleChange('default_issue_place', e.target.value)}
+                  placeholder="المملكة العربية السعودية"
                 />
               </div>
             </CardContent>
@@ -490,45 +491,45 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
                 <div className="space-y-2">
                   <Label className="font-arabic">اللون الرئيسي</Label>
                   <div className="flex gap-2">
-                    <Input 
-                      type="color" 
-                      value={currentSettings.primary_color || '#806852'} 
-                      onChange={(e) => handleChange('primary_color', e.target.value)} 
+                    <Input
+                      type="color"
+                      value={currentSettings.primary_color || '#806852'}
+                      onChange={(e) => handleChange('primary_color', e.target.value)}
                       className="w-16 p-1 h-10"
                     />
-                    <Input 
-                      value={currentSettings.primary_color || '#806852'} 
-                      onChange={(e) => handleChange('primary_color', e.target.value)} 
+                    <Input
+                      value={currentSettings.primary_color || '#806852'}
+                      onChange={(e) => handleChange('primary_color', e.target.value)}
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label className="font-arabic">اللون الثانوي</Label>
                   <div className="flex gap-2">
-                    <Input 
-                      type="color" 
-                      value={currentSettings.secondary_color || '#d0aa67'} 
-                      onChange={(e) => handleChange('secondary_color', e.target.value)} 
+                    <Input
+                      type="color"
+                      value={currentSettings.secondary_color || '#d0aa67'}
+                      onChange={(e) => handleChange('secondary_color', e.target.value)}
                       className="w-16 p-1 h-10"
                     />
-                    <Input 
-                      value={currentSettings.secondary_color || '#d0aa67'} 
-                      onChange={(e) => handleChange('secondary_color', e.target.value)} 
+                    <Input
+                      value={currentSettings.secondary_color || '#d0aa67'}
+                      onChange={(e) => handleChange('secondary_color', e.target.value)}
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label className="font-arabic">لون الخلفية</Label>
                   <div className="flex gap-2">
-                    <Input 
-                      type="color" 
-                      value={currentSettings.bg_color || '#ffffff'} 
-                      onChange={(e) => handleChange('bg_color', e.target.value)} 
+                    <Input
+                      type="color"
+                      value={currentSettings.bg_color || '#ffffff'}
+                      onChange={(e) => handleChange('bg_color', e.target.value)}
                       className="w-16 p-1 h-10"
                     />
-                    <Input 
-                      value={currentSettings.bg_color || '#ffffff'} 
-                      onChange={(e) => handleChange('bg_color', e.target.value)} 
+                    <Input
+                      value={currentSettings.bg_color || '#ffffff'}
+                      onChange={(e) => handleChange('bg_color', e.target.value)}
                     />
                   </div>
                 </div>
@@ -544,8 +545,8 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
             <CardContent className="space-y-6">
               <div className="space-y-2">
                 <Label className="font-arabic">نوع الخط</Label>
-                <Select 
-                  value={currentSettings.font_family || 'IBM Plex Sans Arabic'} 
+                <Select
+                  value={currentSettings.font_family || 'IBM Plex Sans Arabic'}
                   onValueChange={(value) => {
                     const selectedFont = FONT_OPTIONS.find(f => f.name === value)
                     if (selectedFont) {
@@ -570,27 +571,27 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
                 <>
                   <div className="space-y-2">
                     <Label className="font-arabic">اسم الخط المخصص</Label>
-                    <Input 
-                      value={currentSettings.custom_font_name || ''} 
-                      onChange={(e) => handleChange('custom_font_name', e.target.value)} 
+                    <Input
+                      value={currentSettings.custom_font_name || ''}
+                      onChange={(e) => handleChange('custom_font_name', e.target.value)}
                       placeholder="اسم الخط المخصص"
                     />
                   </div>
 
                   <div className="space-y-2">
                     <Label className="font-arabic">رفع ملف الخط المخصص</Label>
-                    <input 
-                      type="file" 
-                      accept=".ttf,.otf,.woff,.woff2" 
-                      onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'font')} 
-                      className="hidden" 
+                    <input
+                      type="file"
+                      accept=".ttf,.otf,.woff,.woff2"
+                      onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'font')}
+                      className="hidden"
                       id="font-upload"
                     />
                     <div className="flex gap-2">
-                      <Button 
-                        variant="outline" 
-                        className="flex-1 font-arabic" 
-                        onClick={() => document.getElementById('font-upload')?.click()} 
+                      <Button
+                        variant="outline"
+                        className="flex-1 font-arabic"
+                        onClick={() => document.getElementById('font-upload')?.click()}
                         disabled={uploadingState.uploadingFont}
                       >
                         {uploadingState.uploadingFont ? (
@@ -626,11 +627,11 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
               <div className="space-y-2">
                 <Label className="font-arabic">حجم الخط (محتوى الشهادة)</Label>
                 <div className="flex items-center gap-4">
-                  <Input 
-                    type="number" 
-                    min="12" 
-                    max="50" 
-                    value={currentSettings.content_font_size || 16} 
+                  <Input
+                    type="number"
+                    min="12"
+                    max="50"
+                    value={currentSettings.content_font_size || 16}
                     onChange={(e) => handleChange('content_font_size', parseInt(e.target.value) || 16)}
                     className="w-24"
                   />
@@ -650,8 +651,8 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
             <CardContent className="space-y-6">
               <div className="space-y-2">
                 <Label className="font-arabic">اختر النمط</Label>
-                <Select 
-                  value={currentSettings.background_pattern || 'diamonds'} 
+                <Select
+                  value={currentSettings.background_pattern || 'diamonds'}
                   onValueChange={(value) => handleChange('background_pattern', value)}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -699,8 +700,8 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
 
               <div className="space-y-2">
                 <Label className="font-arabic">نمط الإطار</Label>
-                <Select 
-                  value={currentSettings.border_style || 'decorative'} 
+                <Select
+                  value={currentSettings.border_style || 'decorative'}
                   onValueChange={(value) => handleChange('border_style', value)}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -714,11 +715,11 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
 
               <div className="space-y-2">
                 <Label className="font-arabic">صورة خلفية مخصصة</Label>
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'background')} 
-                  className="hidden" 
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'background')}
+                  className="hidden"
                   id="background-upload"
                 />
                 {currentSettings.background_image_url ? (
@@ -726,17 +727,17 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
                     <div className="absolute top-2 left-2 bg-green-500 text-white text-xs px-2 py-1 rounded font-arabic">
                       ✓ تم الرفع
                     </div>
-                    <img 
-                      src={currentSettings.background_image_url} 
-                      alt="خلفية الشهادة" 
+                    <img
+                      src={currentSettings.background_image_url}
+                      alt="خلفية الشهادة"
                       className="h-32 w-full object-cover rounded"
                     />
                     <div className="flex gap-2 mt-2">
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         size="sm"
-                        className="flex-1 font-arabic" 
-                        onClick={() => document.getElementById('background-upload')?.click()} 
+                        className="flex-1 font-arabic"
+                        onClick={() => document.getElementById('background-upload')?.click()}
                         disabled={uploadingState.uploadingBackground}
                       >
                         {uploadingState.uploadingBackground ? <Loader2 className="w-4 h-4 animate-spin ml-2" /> : <Upload className="w-4 h-4 ml-2" />}
@@ -785,8 +786,8 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="font-arabic">محاذاة العنوان</Label>
-                  <Select 
-                    value={currentSettings.header_align || 'center'} 
+                  <Select
+                    value={currentSettings.header_align || 'center'}
                     onValueChange={(value) => handleChange('header_align', value)}
                   >
                     <SelectTrigger><SelectValue /></SelectTrigger>
@@ -799,8 +800,8 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
 
                 <div className="space-y-2">
                   <Label className="font-arabic">محاذاة النص</Label>
-                  <Select 
-                    value={currentSettings.content_align || 'justify'} 
+                  <Select
+                    value={currentSettings.content_align || 'justify'}
                     onValueChange={(value) => handleChange('content_align', value)}
                   >
                     <SelectTrigger><SelectValue /></SelectTrigger>
@@ -815,8 +816,8 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
 
               <div className="space-y-2">
                 <Label className="font-arabic">تخطيط معلومات الطالب</Label>
-                <Select 
-                  value={currentSettings.student_info_layout || 'inline'} 
+                <Select
+                  value={currentSettings.student_info_layout || 'inline'}
                   onValueChange={(value) => handleChange('student_info_layout', value)}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -856,8 +857,8 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
                   </div>
                   <div className="space-y-2">
                     <Label className="font-arabic">موضع رمز QR</Label>
-                    <Select 
-                      value={currentSettings.qr_position || 'left'} 
+                    <Select
+                      value={currentSettings.qr_position || 'left'}
                       onValueChange={(value) => handleChange('qr_position', value)}
                     >
                       <SelectTrigger><SelectValue /></SelectTrigger>
@@ -919,11 +920,11 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label className="font-arabic">صورة التوقيع والاسم (المجيز الأول)</Label>
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'signature')} 
-                  className="hidden" 
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'signature')}
+                  className="hidden"
                   id="signature-upload"
                 />
                 {currentSettings.signature_image_url ? (
@@ -932,19 +933,19 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
                       ✓ تم الرفع
                     </div>
                     <img src={currentSettings.signature_image_url} alt="التوقيع" className="h-24 object-contain mx-auto" />
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       className="absolute top-2 right-2 text-red-600 hover:bg-red-100"
                       onClick={() => handleChange('signature_image_url', '')}
                     >
                       <X className="w-4 h-4" />
                     </Button>
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
-                      className="w-full mt-2 font-arabic" 
-                      onClick={() => document.getElementById('signature-upload')?.click()} 
+                      className="w-full mt-2 font-arabic"
+                      onClick={() => document.getElementById('signature-upload')?.click()}
                       disabled={uploadingState.uploadingSignature}
                     >
                       {uploadingState.uploadingSignature ? <Loader2 className="w-4 h-4 animate-spin ml-2" /> : <Upload className="w-4 h-4 ml-2" />}
@@ -971,11 +972,11 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
 
               <div className="space-y-2">
                 <Label className="font-arabic">صورة الختم (يظهر في المنتصف)</Label>
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'secondSignature')} 
-                  className="hidden" 
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0], 'secondSignature')}
+                  className="hidden"
                   id="seal-upload"
                 />
                 {currentSettings.second_signature_image_url ? (
@@ -984,19 +985,19 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
                       ✓ تم الرفع
                     </div>
                     <img src={currentSettings.second_signature_image_url} alt="الختم" className="h-24 object-contain mx-auto" />
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       className="absolute top-2 right-2 text-red-600 hover:bg-red-100"
                       onClick={() => handleChange('second_signature_image_url', '')}
                     >
                       <X className="w-4 h-4" />
                     </Button>
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
-                      className="w-full mt-2 font-arabic" 
-                      onClick={() => document.getElementById('seal-upload')?.click()} 
+                      className="w-full mt-2 font-arabic"
+                      onClick={() => document.getElementById('seal-upload')?.click()}
                       disabled={uploadingState.uploadingSecondSignature}
                     >
                       {uploadingState.uploadingSecondSignature ? <Loader2 className="w-4 h-4 animate-spin ml-2" /> : <Upload className="w-4 h-4 ml-2" />}
@@ -1023,10 +1024,10 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
 
               <div className="space-y-2">
                 <Label className="font-arabic">عنوان الختم</Label>
-                <Input 
-                  value={currentSettings.second_signature_title || ''} 
-                  onChange={(e) => handleChange('second_signature_title', e.target.value)} 
-                  placeholder="مثال: الختم الرسمي" 
+                <Input
+                  value={currentSettings.second_signature_title || ''}
+                  onChange={(e) => handleChange('second_signature_title', e.target.value)}
+                  placeholder="مثال: الختم الرسمي"
                 />
               </div>
             </CardContent>
@@ -1042,31 +1043,31 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label className="font-arabic">اسم التطبيق (يظهر في الهيدر)</Label>
-                <Input 
-                  value={currentSettings.app_name || ''} 
-                  onChange={(e) => handleChange('app_name', e.target.value)} 
-                  placeholder="الإجازات القرآنية" 
+                <Input
+                  value={currentSettings.app_name || ''}
+                  onChange={(e) => handleChange('app_name', e.target.value)}
+                  placeholder="الإجازات القرآنية"
                 />
               </div>
               <div className="space-y-2">
                 <Label className="font-arabic">معلومات التذييل (تظهر في الفوتر)</Label>
-                <Input 
-                  value={currentSettings.footer_info || ''} 
-                  onChange={(e) => handleChange('footer_info', e.target.value)} 
-                  placeholder="أسانيد غازي بن بنيدر العمري" 
+                <Input
+                  value={currentSettings.footer_info || ''}
+                  onChange={(e) => handleChange('footer_info', e.target.value)}
+                  placeholder="أسانيد غازي بن بنيدر العمري"
                 />
               </div>
               <div className="space-y-2">
                 <Label className="font-arabic">مكان الإصدار الافتراضي</Label>
-                <Input 
-                  value={currentSettings.default_issue_place || ''} 
-                  onChange={(e) => handleChange('default_issue_place', e.target.value)} 
-                  placeholder="مثال: المملكة العربية السعودية" 
+                <Input
+                  value={currentSettings.default_issue_place || ''}
+                  onChange={(e) => handleChange('default_issue_place', e.target.value)}
+                  placeholder="مثال: المملكة العربية السعودية"
                 />
               </div>
-              
+
               <Separator />
-              
+
               <div className="flex items-center justify-between rounded-lg border p-4">
                 <div className="space-y-0.5">
                   <Label className="text-base font-arabic">صفحة سجل الإجازات</Label>
@@ -1074,8 +1075,8 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
                     تفعيل أو إلغاء تفعيل عرض صفحة الإجازات المنشورة للعامة.
                   </p>
                 </div>
-                <Switch 
-                  checked={currentSettings.show_public_page || false} 
+                <Switch
+                  checked={currentSettings.show_public_page || false}
                   onCheckedChange={(checked) => handleChange('show_public_page', checked)}
                 />
               </div>
@@ -1087,8 +1088,8 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
                     السماح للزوار بالضغط على "عرض التفاصيل" في صفحة سجل الإجازات.
                   </p>
                 </div>
-                <Switch 
-                  checked={currentSettings.allow_public_view_details || false} 
+                <Switch
+                  checked={currentSettings.allow_public_view_details || false}
                   onCheckedChange={(checked) => handleChange('allow_public_view_details', checked)}
                 />
               </div>
@@ -1122,8 +1123,8 @@ export default function SettingsPanel({ settings, onSettingsUpdate }: SettingsPa
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleResetNarrations} 
+            <AlertDialogAction
+              onClick={handleResetNarrations}
               className="bg-yellow-600 hover:bg-yellow-700"
               disabled={isResetting}
             >

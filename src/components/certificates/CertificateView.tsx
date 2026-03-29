@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Download, Share2, Loader2, Printer, ArrowLeft, Eye, X } from 'lucide-react'
 import {
@@ -21,7 +20,6 @@ interface CertificateViewProps {
 }
 
 export default function CertificateView({ certificateId, onBack }: CertificateViewProps) {
-  const supabase = createClient()
   const [certificate, setCertificate] = useState<any>(null)
   const [settings, setSettings] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -69,56 +67,25 @@ export default function CertificateView({ certificateId, onBack }: CertificateVi
   const fetchData = async () => {
     try {
       setLoading(true)
-      
-      // Fetch certificate
-      const { data: certData, error: certError } = await supabase
-        .from('ijazah_certificates')
-        .select('*')
-        .eq('id', certificateId)
-        .single()
 
-      if (certError) throw certError
+      // Fetch certificate from API
+      const certRes = await fetch(`/api/admin/certificates?scholarId=all&certificateId=${certificateId}`)
+      if (!certRes.ok) throw new Error('Certificate not found')
+      const certResult = await certRes.json()
+
+      // Handle both array and single object response
+      const certData = Array.isArray(certResult) ? certResult[0] : certResult
       if (!certData) throw new Error('Certificate not found')
 
-      // Fetch user profile if exists
-      let studentName = certData.metadata?.student_name || 'غير محدد'
-      if (certData.user_id && !certData.metadata?.student_name) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('full_name, full_name_arabic')
-          .eq('id', certData.user_id)
-          .single()
-        if (profile) {
-          studentName = profile.full_name_arabic || profile.full_name || studentName
-        }
-      }
-
-      // Fetch scholar name if exists
-      let scholarName = 'غير محدد'
-      if (certData.scholar_id) {
-        const { data: scholarProfile } = await supabase
-          .from('profiles')
-          .select('full_name, full_name_arabic')
-          .eq('id', certData.scholar_id)
-          .single()
-        if (scholarProfile) {
-          scholarName = scholarProfile.full_name_arabic || scholarProfile.full_name || scholarName
-        }
-      }
-
-      // Fetch app settings
-      const { data: settingsData } = await supabase
-        .from('app_settings')
-        .select('*')
-        .limit(1)
-        .single()
+      const studentName = certData.student_name || certData.studentName || certData.metadata?.student_name || 'غير محدد'
+      const scholarName = certData.scholar_name || certData.scholarName || 'غير محدد'
 
       setCertificate({
         ...certData,
         student_name: studentName,
         scholar_name: scholarName,
       })
-      setSettings(settingsData || getDefaultSettings())
+      setSettings(certData.settings || getDefaultSettings())
     } catch (err: any) {
       console.error('Error fetching certificate:', err)
       setError(err.message || 'حدث خطأ في تحميل الشهادة')

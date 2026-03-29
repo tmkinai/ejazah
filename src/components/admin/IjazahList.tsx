@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,7 +23,6 @@ import {
 
 export default function IjazahList() {
   const router = useRouter()
-  const supabase = createClient()
   const [ijazat, setIjazat] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -38,12 +36,10 @@ export default function IjazahList() {
   const loadData = async () => {
     try {
       setIsLoading(true)
-      const { data, error } = await supabase
-        .from('ijazah_certificates')
-        .select('*')
-        .order('created_at', { ascending: false })
+      const res = await fetch('/api/admin/certificates')
+      if (!res.ok) throw new Error('Failed to fetch certificates')
 
-      if (error) throw error
+      const { data } = await res.json()
       setIjazat(data || [])
     } catch (error) {
       console.error('Error loading data:', error)
@@ -54,12 +50,13 @@ export default function IjazahList() {
 
   const handleTogglePublic = async (id: string, is_public: boolean) => {
     try {
-      const { error } = await supabase
-        .from('ijazah_certificates')
-        .update({ is_public: !is_public })
-        .eq('id', id)
+      const res = await fetch('/api/admin/certificates', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, isPublic: !is_public }),
+      })
 
-      if (error) throw error
+      if (!res.ok) throw new Error('Failed to update public status')
       await loadData()
     } catch (error) {
       console.error('Error updating public status:', error)
@@ -68,12 +65,13 @@ export default function IjazahList() {
 
   const handleArchiveToggle = async (id: string, archived: boolean) => {
     try {
-      const { error } = await supabase
-        .from('ijazah_certificates')
-        .update({ status: archived ? 'active' : 'revoked' })
-        .eq('id', id)
+      const res = await fetch('/api/admin/certificates', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status: archived ? 'active' : 'revoked' }),
+      })
 
-      if (error) throw error
+      if (!res.ok) throw new Error('Failed to update archive status')
       await loadData()
     } catch (error) {
       console.error('Error updating archive status:', error)
@@ -84,12 +82,11 @@ export default function IjazahList() {
     if (!deleteDialog.id) return
 
     try {
-      const { error } = await supabase
-        .from('ijazah_certificates')
-        .delete()
-        .eq('id', deleteDialog.id)
+      const res = await fetch(`/api/admin/certificates?id=${deleteDialog.id}`, {
+        method: 'DELETE',
+      })
 
-      if (error) throw error
+      if (!res.ok) throw new Error('Failed to delete certificate')
       setDeleteDialog({ open: false, id: null })
       await loadData()
     } catch (error) {

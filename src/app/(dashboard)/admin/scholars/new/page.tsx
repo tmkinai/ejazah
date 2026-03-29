@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,7 +29,7 @@ type ScholarFormData = z.infer<typeof scholarSchema>
 
 export default function AddScholarPage() {
   const router = useRouter()
-  const supabase = createClient()
+  const { data: session } = useSession()
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -46,40 +46,7 @@ export default function AddScholarPage() {
     setError(null)
 
     try {
-      // Step 1: Check if user with this email already exists
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('id, roles')
-        .eq('email', data.email)
-        .single()
-
-      let userId: string
-
-      if (existingProfile) {
-        // User exists, just add scholar role
-        userId = existingProfile.id
-        const updatedRoles = Array.from(new Set([...existingProfile.roles, 'scholar']))
-        
-        const { error: roleError } = await supabase
-          .from('profiles')
-          .update({ 
-            roles: updatedRoles,
-            full_name: data.full_name,
-            full_name_arabic: data.full_name_arabic,
-            phone_number: data.phone_number || null,
-          })
-          .eq('id', userId)
-
-        if (roleError) throw roleError
-      } else {
-        // User doesn't exist, create invitation
-        // For now, we'll show an error asking admin to have the user register first
-        setError('المستخدم غير موجود. يرجى مطالبة الشيخ بالتسجيل أولاً باستخدام هذا البريد الإلكتروني.')
-        setSubmitting(false)
-        return
-      }
-
-      // Step 2: Parse JSON fields
+      // Parse JSON fields
       let credentialsJson
       let sanadChainJson
 
@@ -95,21 +62,26 @@ export default function AddScholarPage() {
         sanadChainJson = { chain: data.sanad_chain }
       }
 
-      // Step 3: Create or update scholar record
-      const { error: scholarError } = await supabase
-        .from('scholars')
-        .upsert({
-          id: userId,
+      // Call API to create scholar
+      const res = await fetch('/api/scholars', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: data.email,
+          full_name: data.full_name,
+          full_name_arabic: data.full_name_arabic,
+          phone_number: data.phone_number || null,
           specialization: data.specialization,
           bio_detailed: data.bio_detailed,
           credentials: credentialsJson,
           sanad_chain: sanadChainJson,
-          is_active: true,
-        }, {
-          onConflict: 'id'
-        })
+        }),
+      })
 
-      if (scholarError) throw scholarError
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to add scholar')
+      }
 
       // Success! Redirect to scholars list
       router.push('/admin/scholars')

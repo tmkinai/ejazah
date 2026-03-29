@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
@@ -10,62 +10,55 @@ import RequestListItem from '@/components/admin/RequestListItem'
 import RequestDetails from '@/components/admin/RequestDetails'
 
 export default function RequestManagement() {
-  const supabase = createClient()
+  const { data: session, status: sessionStatus } = useSession()
   const [requests, setRequests] = useState<any[]>([])
   const [selectedRequest, setSelectedRequest] = useState<any>(null)
   const [loadingState, setLoadingState] = useState<'loading-auth' | 'loading-data' | 'idle' | 'error'>('loading-auth')
   const [errorMessage, setErrorMessage] = useState('')
 
   useEffect(() => {
-    checkAuth()
-  }, [])
+    if (sessionStatus === 'loading') return
 
-  const checkAuth = async () => {
-    try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      
-      if (userError || !user) {
-        setErrorMessage('المستخدم غير مسجل.')
-        setLoadingState('error')
-        return
-      }
-
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('roles')
-        .eq('id', user.id)
-        .single()
-
-      if (profileError || !profile?.roles?.includes('admin')) {
-        setErrorMessage('وصول مرفوض. حسابك ليس لديه صلاحيات المدير.')
-        setLoadingState('error')
-        return
-      }
-
-      setLoadingState('loading-data')
-    } catch (error) {
-      setErrorMessage('فشل التحقق من هوية المستخدم.')
+    if (sessionStatus === 'unauthenticated' || !session?.user) {
+      setErrorMessage('المستخدم غير مسجل.')
       setLoadingState('error')
+      return
     }
-  }
+
+    // Check admin role
+    const checkRole = async () => {
+      try {
+        const res = await fetch(`/api/profiles?id=${session.user.id}`)
+        if (!res.ok) {
+          setErrorMessage('فشل التحقق من هوية المستخدم.')
+          setLoadingState('error')
+          return
+        }
+        const profile = await res.json()
+
+        if (!profile?.roles?.includes('admin')) {
+          setErrorMessage('وصول مرفوض. حسابك ليس لديه صلاحيات المدير.')
+          setLoadingState('error')
+          return
+        }
+
+        setLoadingState('loading-data')
+      } catch (error) {
+        setErrorMessage('فشل التحقق من هوية المستخدم.')
+        setLoadingState('error')
+      }
+    }
+
+    checkRole()
+  }, [session, sessionStatus])
 
   const loadRequests = useCallback(async () => {
     setLoadingState('loading-data')
     try {
-      const { data: allRequests, error } = await supabase
-        .from('ijazah_applications')
-        .select(`
-          *,
-          profiles!ijazah_applications_user_id_fkey (
-            id,
-            full_name,
-            email,
-            phone_number
-          )
-        `)
-        .order('created_at', { ascending: false })
+      const res = await fetch('/api/admin/requests')
+      if (!res.ok) throw new Error('Failed to fetch requests')
 
-      if (error) throw error
+      const allRequests = await res.json()
 
       setRequests(allRequests || [])
       if ((allRequests?.length || 0) > 0 && !selectedRequest) {

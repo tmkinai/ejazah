@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import {
   Popover,
@@ -12,48 +12,30 @@ import { Bell } from 'lucide-react'
 import { NotificationCenter } from './notification-center'
 
 export function NotificationBell() {
-  const supabase = createClient()
+  const { data: session } = useSession()
   const [unreadCount, setUnreadCount] = useState(0)
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
+    if (!session?.user) return
+
     loadUnreadCount()
 
-    // Subscribe to real-time notifications
-    const channel = supabase
-      .channel('notifications-count')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'notifications',
-        },
-        () => {
-          loadUnreadCount()
-        }
-      )
-      .subscribe()
+    // Poll for new notifications every 30 seconds
+    const interval = setInterval(loadUnreadCount, 30000)
 
     return () => {
-      supabase.removeChannel(channel)
+      clearInterval(interval)
     }
-  }, [])
+  }, [session?.user])
 
   async function loadUnreadCount() {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      const res = await fetch('/api/notifications?count=true&unread=true')
+      if (!res.ok) throw new Error('Failed to load unread count')
+      const data = await res.json()
 
-      const { count, error } = await supabase
-        .from('notifications')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('is_read', false)
-
-      if (error) throw error
-
-      setUnreadCount(count || 0)
+      setUnreadCount(data.count || 0)
     } catch (error) {
       console.error('Error loading unread count:', error)
     }

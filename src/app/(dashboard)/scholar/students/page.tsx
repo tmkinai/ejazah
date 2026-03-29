@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,7 +23,7 @@ interface Student {
 }
 
 export default function StudentsPage() {
-  const supabase = createClient()
+  const { data: session, status: sessionStatus } = useSession()
   const [loading, setLoading] = useState(true)
   const [students, setStudents] = useState<Student[]>([])
   const [searchTerm, setSearchTerm] = useState('')
@@ -33,33 +33,22 @@ export default function StudentsPage() {
   })
 
   useEffect(() => {
+    if (sessionStatus === 'loading') return
+    if (!session) return
     loadStudents()
-  }, [])
+  }, [session, sessionStatus])
 
   const loadStudents = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
       // Get all certificates issued by this scholar
-      const { data: certificates } = await supabase
-        .from('ijazah_certificates')
-        .select(`
-          user_id,
-          certificate_number,
-          ijazah_type,
-          issue_date,
-          profiles:user_id (
-            id,
-            full_name,
-            email,
-            phone_number
-          )
-        `)
-        .eq('scholar_id', user.id)
-        .order('issue_date', { ascending: false })
+      const res = await fetch('/api/admin/certificates?scholarId=me')
+      if (!res.ok) {
+        setLoading(false)
+        return
+      }
+      const certificates = await res.json()
 
-      if (!certificates) {
+      if (!certificates || certificates.length === 0) {
         setLoading(false)
         return
       }
@@ -68,27 +57,31 @@ export default function StudentsPage() {
       const studentsMap = new Map<string, Student>()
 
       certificates.forEach((cert: any) => {
-        const profile = cert.profiles
-        if (!profile) return
+        const userId = cert.user_id || cert.userId
+        const userName = cert.user?.full_name || cert.user?.fullName || 'Unknown'
+        const userEmail = cert.user?.email || ''
+        const userPhone = cert.user?.phone_number || cert.user?.phoneNumber
 
-        if (!studentsMap.has(cert.user_id)) {
-          studentsMap.set(cert.user_id, {
-            id: cert.user_id,
-            full_name: profile.full_name || 'Unknown',
-            email: profile.email || '',
-            phone_number: profile.phone_number,
+        if (!userId) return
+
+        if (!studentsMap.has(userId)) {
+          studentsMap.set(userId, {
+            id: userId,
+            full_name: userName,
+            email: userEmail,
+            phone_number: userPhone,
             certificatesCount: 0,
           })
         }
 
-        const student = studentsMap.get(cert.user_id)!
+        const student = studentsMap.get(userId)!
         student.certificatesCount++
 
         if (!student.latestCertificate) {
           student.latestCertificate = {
-            certificate_number: cert.certificate_number,
-            ijazah_type: cert.ijazah_type,
-            issue_date: cert.issue_date,
+            certificate_number: cert.certificate_number || cert.certificateNumber,
+            ijazah_type: cert.ijazah_type || cert.ijazahType,
+            issue_date: cert.issue_date || cert.issueDate,
           }
         }
       })

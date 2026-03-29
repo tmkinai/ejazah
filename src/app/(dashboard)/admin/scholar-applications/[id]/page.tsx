@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -34,7 +34,7 @@ interface ScholarApplication {
 export default function ScholarApplicationDetailPage() {
   const router = useRouter()
   const params = useParams()
-  const supabase = createClient()
+  const { data: session, status: sessionStatus } = useSession()
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
   const [application, setApplication] = useState<ScholarApplication | null>(null)
@@ -42,23 +42,22 @@ export default function ScholarApplicationDetailPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    loadApplication()
-  }, [params.id])
+    if (sessionStatus !== 'loading') {
+      loadApplication()
+    }
+  }, [params.id, sessionStatus])
 
   const loadApplication = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
+      if (!session?.user) {
         router.push('/auth/login')
         return
       }
 
       // Check if user is admin
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('roles')
-        .eq('id', user.id)
-        .single()
+      const profileRes = await fetch('/api/profiles')
+      if (!profileRes.ok) throw new Error('Failed to load profile')
+      const profile = await profileRes.json()
 
       if (!profile?.roles?.includes('admin')) {
         router.push('/dashboard')
@@ -66,29 +65,9 @@ export default function ScholarApplicationDetailPage() {
       }
 
       // Fetch application
-      const { data: appData, error: appError } = await supabase
-        .from('scholar_applications')
-        .select(`
-          id,
-          user_id,
-          status,
-          specialization,
-          bio,
-          credentials,
-          sanad_chain,
-          documents,
-          submitted_at,
-          reviewer_notes,
-          profiles:user_id (
-            full_name,
-            email,
-            phone_number
-          )
-        `)
-        .eq('id', params.id)
-        .single()
-
-      if (appError) throw appError
+      const appRes = await fetch(`/api/scholar-applications?id=${params.id}`)
+      if (!appRes.ok) throw new Error('Failed to load application')
+      const appData = await appRes.json()
 
       if (!appData) {
         router.push('/admin/scholar-applications')
@@ -107,9 +86,9 @@ export default function ScholarApplicationDetailPage() {
         submitted_at: appData.submitted_at,
         reviewer_notes: appData.reviewer_notes,
         user: {
-          full_name: (appData.profiles as any)?.full_name || 'Unknown',
-          email: (appData.profiles as any)?.email || '',
-          phone_number: (appData.profiles as any)?.phone_number,
+          full_name: appData.profiles?.full_name || appData.user?.full_name || 'Unknown',
+          email: appData.profiles?.email || appData.user?.email || '',
+          phone_number: appData.profiles?.phone_number || appData.user?.phone_number,
         },
       }
 
@@ -130,54 +109,26 @@ export default function ScholarApplicationDetailPage() {
     setError(null)
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('User not authenticated')
-
       // Update application status
-      const { error: updateError } = await supabase
-        .from('scholar_applications')
-        .update({
+      const res = await fetch('/api/scholar-applications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: application.id,
           status: 'approved',
-          reviewer_notes: notes,
-          reviewer_id: user.id,
-          reviewed_at: new Date().toISOString(),
-        })
-        .eq('id', application.id)
-
-      if (updateError) throw updateError
-
-      // Add scholar role to user's profile
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('roles')
-        .eq('id', application.user_id)
-        .single()
-
-      const currentRoles = profile?.roles || ['student']
-      const updatedRoles = Array.from(new Set([...currentRoles, 'scholar']))
-
-      const { error: roleError } = await supabase
-        .from('profiles')
-        .update({ roles: updatedRoles })
-        .eq('id', application.user_id)
-
-      if (roleError) throw roleError
-
-      // Create scholar record
-      const { error: scholarError } = await supabase
-        .from('scholars')
-        .upsert({
-          id: application.user_id,
+          adminNotes: notes,
+          userId: application.user_id,
           specialization: application.specialization,
-          bio_detailed: application.bio,
+          bio: application.bio,
           credentials: application.credentials,
-          sanad_chain: application.sanad_chain,
-          is_active: true,
-        }, {
-          onConflict: 'id'
-        })
+          sanadChain: application.sanad_chain,
+        }),
+      })
 
-      if (scholarError) throw scholarError
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to approve application')
+      }
 
       alert('تمت الموافقة على الطلب بنجاح!')
       router.push('/admin/scholar-applications')
@@ -201,20 +152,20 @@ export default function ScholarApplicationDetailPage() {
     setError(null)
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('User not authenticated')
-
-      const { error: updateError } = await supabase
-        .from('scholar_applications')
-        .update({
+      const res = await fetch('/api/scholar-applications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: application.id,
           status: 'rejected',
-          reviewer_notes: notes,
-          reviewer_id: user.id,
-          reviewed_at: new Date().toISOString(),
-        })
-        .eq('id', application.id)
+          adminNotes: notes,
+        }),
+      })
 
-      if (updateError) throw updateError
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to reject application')
+      }
 
       alert('تم رفض الطلب')
       router.push('/admin/scholar-applications')

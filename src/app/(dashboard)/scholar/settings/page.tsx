@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -10,7 +10,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Loader2, Save, Settings as SettingsIcon, AlertCircle, Bell } from 'lucide-react'
 
 export default function ScholarSettingsPage() {
-  const supabase = createClient()
+  const { data: session, status: sessionStatus } = useSession()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -23,20 +23,16 @@ export default function ScholarSettingsPage() {
   })
 
   useEffect(() => {
+    if (sessionStatus === 'loading') return
+    if (!session) return
     loadSettings()
-  }, [])
+  }, [session, sessionStatus])
 
   const loadSettings = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      // Load scholar metadata
-      const { data: scholarData } = await supabase
-        .from('scholars')
-        .select('metadata, profile_visibility')
-        .eq('id', user.id)
-        .single()
+      const res = await fetch('/api/scholars')
+      if (!res.ok) return
+      const scholarData = await res.json()
 
       if (scholarData) {
         const metadata = scholarData.metadata || {}
@@ -44,7 +40,7 @@ export default function ScholarSettingsPage() {
           email_new_application: metadata.email_new_application ?? true,
           email_application_approved: metadata.email_application_approved ?? true,
           inapp_new_application: metadata.inapp_new_application ?? true,
-          profile_public: scholarData.profile_visibility === 'public',
+          profile_public: (scholarData.profile_visibility || scholarData.profileVisibility) === 'public',
         })
       }
     } catch (error) {
@@ -60,24 +56,25 @@ export default function ScholarSettingsPage() {
     setSuccess(false)
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('User not authenticated')
-
       const { email_new_application, email_application_approved, inapp_new_application, profile_public } = settings
 
-      const { error: updateError } = await supabase
-        .from('scholars')
-        .update({
+      const res = await fetch('/api/scholars', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           metadata: {
             email_new_application,
             email_application_approved,
             inapp_new_application,
           },
           profile_visibility: profile_public ? 'public' : 'private',
-        })
-        .eq('id', user.id)
+        }),
+      })
 
-      if (updateError) throw updateError
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'حدث خطأ أثناء الحفظ')
+      }
 
       setSuccess(true)
       setTimeout(() => setSuccess(false), 3000)

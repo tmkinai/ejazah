@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -23,26 +23,24 @@ interface Scholar {
 
 export default function ScholarsManagementPage() {
   const router = useRouter()
-  const supabase = createClient()
+  const { data: session, status: sessionStatus } = useSession()
   const [scholars, setScholars] = useState<Scholar[]>([])
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
+    if (sessionStatus === 'loading') return
+    if (!session?.user) {
+      router.push('/auth/login')
+      return
+    }
+
     async function loadScholars() {
       try {
         // Check if user is admin
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) {
-          router.push('/auth/login')
-          return
-        }
-
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('roles')
-          .eq('id', user.id)
-          .single()
+        const profileRes = await fetch('/api/profiles')
+        const profileResult = await profileRes.json()
+        const profile = profileResult.data
 
         if (!profile?.roles?.includes('admin')) {
           router.push('/dashboard')
@@ -52,35 +50,23 @@ export default function ScholarsManagementPage() {
         setIsAdmin(true)
 
         // Fetch all scholars
-        const { data: scholarsData, error } = await supabase
-          .from('scholars')
-          .select(`
-            id,
-            specialization,
-            is_active,
-            total_ijazat_issued,
-            acceptance_rate,
-            created_at,
-            profiles:id (
-              full_name,
-              email
-            )
-          `)
-          .order('created_at', { ascending: false })
+        const res = await fetch('/api/scholars')
+        const result = await res.json()
+        if (!res.ok) throw new Error(result.error)
 
-        if (error) throw error
+        const scholarsData = result.data || []
 
         // Transform data
-        const transformedScholars = scholarsData?.map((scholar: any) => ({
+        const transformedScholars = scholarsData.map((scholar: any) => ({
           id: scholar.id,
-          full_name: scholar.profiles?.full_name || 'Unknown',
-          email: scholar.profiles?.email || '',
+          full_name: scholar.full_name || scholar.profiles?.full_name || 'Unknown',
+          email: scholar.email || scholar.profiles?.email || '',
           specialization: scholar.specialization,
-          is_active: scholar.is_active,
-          total_ijazat_issued: scholar.total_ijazat_issued,
-          acceptance_rate: scholar.acceptance_rate,
-          created_at: scholar.created_at,
-        })) || []
+          is_active: scholar.is_active ?? scholar.isActive,
+          total_ijazat_issued: scholar.total_ijazat_issued ?? scholar.totalIjazatIssued ?? 0,
+          acceptance_rate: scholar.acceptance_rate ?? scholar.acceptanceRate ?? 0,
+          created_at: scholar.created_at || scholar.createdAt,
+        }))
 
         setScholars(transformedScholars)
       } catch (error) {
@@ -91,7 +77,7 @@ export default function ScholarsManagementPage() {
     }
 
     loadScholars()
-  }, [router, supabase])
+  }, [router, sessionStatus, session])
 
   if (loading) {
     return (

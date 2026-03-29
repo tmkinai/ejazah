@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Loader2, ClipboardList, Clock, CheckCircle, XCircle, AlertCircle, Users, TrendingUp, Calendar } from 'lucide-react'
@@ -33,7 +32,6 @@ interface Stats {
 
 export default function RequestsDashboard() {
   const router = useRouter()
-  const supabase = createClient()
   const [requests, setRequests] = useState<any[]>([])
   const [stats, setStats] = useState<Stats>({
     total: 0,
@@ -54,18 +52,10 @@ export default function RequestsDashboard() {
 
   const loadData = async () => {
     try {
-      const { data: allRequests, error } = await supabase
-        .from('ijazah_applications')
-        .select(`
-          *,
-          profiles!ijazah_applications_user_id_fkey (
-            full_name,
-            email
-          )
-        `)
-        .order('created_at', { ascending: false })
+      const res = await fetch('/api/admin/requests')
+      if (!res.ok) throw new Error('Failed to fetch requests')
 
-      if (error) throw error
+      const allRequests = await res.json()
 
       setRequests(allRequests || [])
 

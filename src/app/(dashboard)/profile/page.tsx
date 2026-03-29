@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,28 +27,24 @@ interface Profile {
 
 export default function ProfilePage() {
   const router = useRouter()
-  const supabase = createClient()
+  const { data: session, status: sessionStatus } = useSession()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [profile, setProfile] = useState<Profile | null>(null)
 
   useEffect(() => {
+    if (sessionStatus === 'loading') return
+    if (!session?.user) {
+      router.push('/auth/login')
+      return
+    }
+
     async function loadProfile() {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) {
-          router.push('/auth/login')
-          return
-        }
-
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single()
-
-        if (error) throw error
-        setProfile(data)
+        const res = await fetch('/api/profiles')
+        const result = await res.json()
+        if (!res.ok) throw new Error(result.error)
+        setProfile(result.data)
       } catch (error) {
         console.error('Error loading profile:', error)
       } finally {
@@ -57,16 +53,17 @@ export default function ProfilePage() {
     }
 
     loadProfile()
-  }, [router, supabase])
+  }, [router, sessionStatus, session])
 
   const handleSave = async () => {
     if (!profile) return
     setSaving(true)
 
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
+      const res = await fetch('/api/profiles', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           full_name: profile.full_name,
           full_name_arabic: profile.full_name_arabic,
           phone_number: profile.phone_number,
@@ -75,10 +72,10 @@ export default function ProfilePage() {
           country: profile.country,
           city: profile.city,
           bio: profile.bio,
-        })
-        .eq('id', profile.id)
-
-      if (error) throw error
+        }),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error)
 
       toast({
         title: 'تم الحفظ',

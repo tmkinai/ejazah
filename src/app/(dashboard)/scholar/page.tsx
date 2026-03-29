@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useSession, signOut } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -35,7 +35,7 @@ interface Certificate {
 
 export default function ScholarDashboardPage() {
   const router = useRouter()
-  const supabase = createClient()
+  const { data: session, status } = useSession()
   const [loading, setLoading] = useState(true)
   const [scholarName, setScholarName] = useState('')
   const [applications, setApplications] = useState<Application[]>([])
@@ -49,112 +49,64 @@ export default function ScholarDashboardPage() {
   })
 
   useEffect(() => {
+    if (status === 'loading') return
+    if (!session) {
+      router.push('/auth/login')
+      return
+    }
     loadScholarData()
-  }, [])
+  }, [session, status])
 
   const loadScholarData = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.push('/auth/login')
-        return
-      }
-
-      // Fetch profile
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('roles, full_name')
-        .eq('id', user.id)
-        .single()
-
-      if (!profile?.roles?.includes('scholar') && !profile?.roles?.includes('admin')) {
+      // Fetch scholar data from API
+      const scholarsRes = await fetch('/api/scholars')
+      if (!scholarsRes.ok) {
         router.push('/dashboard')
         return
       }
+      const scholarData = await scholarsRes.json()
 
-      setScholarName(profile.full_name || 'Scholar')
+      setScholarName(session?.user?.name || 'Scholar')
 
-      // Fetch scholar's statistics
-      const { data: scholarData } = await supabase
-        .from('scholars')
-        .select('total_ijazat_issued')
-        .eq('id', user.id)
-        .single()
+      // Fetch applications from scholar-applications API
+      const appsRes = await fetch('/api/scholar-applications')
+      const appsData = appsRes.ok ? await appsRes.json() : []
 
-      // Fetch applications
-      const { data: applicationsData } = await supabase
-        .from('ijazah_applications')
-        .select(`
-          id,
-          application_number,
-          ijazah_type,
-          status,
-          submitted_at,
-          personal_info,
-          scholar_id,
-          profiles:user_id (
-            full_name,
-            email
-          )
-        `)
-        .in('status', ['submitted', 'under_review', 'interview_scheduled', 'approved'])
-        .order('submitted_at', { ascending: false })
-        .limit(10)
-
-      const transformedApps = applicationsData?.map((app: any) => ({
+      const transformedApps = (appsData || []).map((app: any) => ({
         id: app.id,
-        application_number: app.application_number,
-        ijazah_type: app.ijazah_type,
+        application_number: app.application_number || app.applicationNumber,
+        ijazah_type: app.ijazah_type || app.ijazahType,
         status: app.status,
-        submitted_at: app.submitted_at,
-        personal_info: app.personal_info,
+        submitted_at: app.submitted_at || app.submittedAt,
+        personal_info: app.personal_info || app.personalInfo,
         user: {
-          full_name: app.profiles?.full_name || 'Unknown',
-          email: app.profiles?.email || '',
+          full_name: app.user?.full_name || app.user?.fullName || 'Unknown',
+          email: app.user?.email || '',
         },
-      })) || []
+      }))
 
       setApplications(transformedApps)
 
       // Fetch recent certificates
-      const { data: certificatesData } = await supabase
-        .from('ijazah_certificates')
-        .select(`
-          id,
-          certificate_number,
-          ijazah_type,
-          issue_date,
-          profiles:user_id (
-            full_name
-          )
-        `)
-        .eq('scholar_id', user.id)
-        .order('issue_date', { ascending: false })
-        .limit(5)
+      const certsRes = await fetch('/api/admin/certificates?scholarId=me&limit=5')
+      const certsData = certsRes.ok ? await certsRes.json() : []
 
-      const transformedCerts = certificatesData?.map((cert: any) => ({
+      const transformedCerts = (certsData || []).map((cert: any) => ({
         id: cert.id,
-        certificate_number: cert.certificate_number,
-        ijazah_type: cert.ijazah_type,
-        issue_date: cert.issue_date,
+        certificate_number: cert.certificate_number || cert.certificateNumber,
+        ijazah_type: cert.ijazah_type || cert.ijazahType,
+        issue_date: cert.issue_date || cert.issueDate,
         user: {
-          full_name: cert.profiles?.full_name || 'Unknown',
+          full_name: cert.user?.full_name || cert.user?.fullName || 'Unknown',
         },
-      })) || []
+      }))
 
       setRecentCertificates(transformedCerts)
 
-      // Count unique students
-      const { data: studentsData } = await supabase
-        .from('ijazah_certificates')
-        .select('user_id')
-        .eq('scholar_id', user.id)
-
-      const uniqueStudents = new Set(studentsData?.map((s: any) => s.user_id)).size
-
       // Calculate stats
       const pending = transformedApps.filter((a: Application) => a.status === 'submitted').length
-      const underReview = transformedApps.filter((a: Application) => 
+      const underReview = transformedApps.filter((a: Application) =>
         ['under_review', 'interview_scheduled'].includes(a.status)
       ).length
       const completed = transformedApps.filter((a: Application) => a.status === 'approved').length
@@ -163,8 +115,8 @@ export default function ScholarDashboardPage() {
         pending,
         underReview,
         completed,
-        totalIssued: scholarData?.total_ijazat_issued || 0,
-        totalStudents: uniqueStudents,
+        totalIssued: scholarData?.total_ijazat_issued || scholarData?.totalIjazatIssued || 0,
+        totalStudents: scholarData?.totalStudents || 0,
       })
     } catch (error) {
       console.error('Error loading scholar dashboard:', error)
@@ -174,8 +126,7 @@ export default function ScholarDashboardPage() {
   }
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.push('/auth/login')
+    await signOut({ callbackUrl: '/auth/login' })
   }
 
   const getStatusBadge = (status: string) => {

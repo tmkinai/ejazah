@@ -1,7 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useSession } from 'next-auth/react'
 
 export type UserRole = 'student' | 'scholar' | 'admin'
 
@@ -16,43 +15,18 @@ interface UseRolesReturn {
 }
 
 export function useRoles(): UseRolesReturn {
-  const [roles, setRoles] = useState<UserRole[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [userId, setUserId] = useState<string | null>(null)
-  const supabase = createClient()
+  const { data: session, status } = useSession()
+  const isLoading = status === 'loading'
 
-  useEffect(() => {
-    async function loadRoles() {
-      try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) {
-          setIsLoading(false)
-          return
-        }
-
-        setUserId(user.id)
-
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('roles')
-          .eq('id', user.id)
-          .single()
-
-        if (profile?.roles) {
-          setRoles(profile.roles as UserRole[])
-        } else {
-          setRoles(['student'])
-        }
-      } catch (error) {
-        console.error('Error loading roles:', error)
-        setRoles(['student'])
-      } finally {
-        setIsLoading(false)
-      }
+  const roles: UserRole[] = (() => {
+    const r = (session?.user as any)?.roles
+    if (!r) return ['student']
+    if (typeof r === 'string') {
+      try { return JSON.parse(r) } catch { return ['student'] }
     }
-
-    loadRoles()
-  }, [supabase])
+    if (Array.isArray(r)) return r
+    return ['student']
+  })()
 
   const hasRole = (role: UserRole) => roles.includes(role)
 
@@ -63,6 +37,6 @@ export function useRoles(): UseRolesReturn {
     isScholar: hasRole('scholar') || hasRole('admin'),
     isAdmin: hasRole('admin'),
     hasRole,
-    userId,
+    userId: session?.user?.id ?? null,
   }
 }
