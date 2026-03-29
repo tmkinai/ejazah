@@ -386,8 +386,6 @@ export default function AdminSettingsPage() {
 
       if (!res.ok) throw new Error('Failed to reset')
 
-      if (error) throw error
-
       await loadNarrationTypes()
 
       toast({
