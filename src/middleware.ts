@@ -2,6 +2,14 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+  let response = NextResponse.next()
+
+  // Clean old Supabase cookies if present
+  const oldSupabaseCookie = request.cookies.get('sb-cvzauvdhvjfpcbzoelkg-auth-token')
+  if (oldSupabaseCookie) {
+    response.cookies.set('sb-cvzauvdhvjfpcbzoelkg-auth-token', '', { maxAge: 0, path: '/' })
+    response.cookies.set('sb-cvzauvdhvjfpcbzoelkg-auth-token-code-verifier', '', { maxAge: 0, path: '/' })
+  }
 
   // Get the session token from cookies (Auth.js stores it here)
   const sessionToken =
@@ -25,10 +33,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
-  // Role-based protection is handled at the page/component level via API routes
-  // since edge middleware can't access the database directly
-
-  return NextResponse.next()
+  return response
 }
 
 export const config = {

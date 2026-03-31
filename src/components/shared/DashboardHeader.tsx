@@ -71,8 +71,7 @@ export default function DashboardHeader({ appSettings }: DashboardHeaderProps) {
   }
 
   const handleLogout = async () => {
-    await signOut({ redirect: false })
-    router.push('/auth/login')
+    await signOut({ callbackUrl: '/auth/login' })
   }
 
   const hasRole = (role: string) => {
