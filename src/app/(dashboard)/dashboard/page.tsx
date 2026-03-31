@@ -26,19 +26,19 @@ import { ar } from 'date-fns/locale'
 
 interface Application {
   id: string
-  application_number: string
-  ijazah_type: string
+  applicationNumber: string
+  ijazahType: string
   status: string
-  created_at: string
-  submitted_at: string | null
+  createdAt: string
+  submittedAt: string | null
 }
 
 interface Certificate {
   id: string
-  certificate_number: string
-  ijazah_type: string
+  certificateNumber: string
+  ijazahType: string
   status: string
-  issue_date: string
+  issueDate: string | null
   recitation: string | null
 }
 
@@ -98,14 +98,13 @@ export default function DashboardPage() {
         }
       }
 
-      // Load recent applications
-      const appsRes = await fetch('/api/admin/requests')
+      // Load user's own applications
+      const appsRes = await fetch('/api/my/applications')
       const appsResult = await appsRes.json()
       const appsData = appsResult.data || []
 
       setApplications(appsData.slice(0, 5))
 
-      // Count pending and approved applications
       const pendingCount = appsData.filter((a: Application) =>
         ['submitted', 'under_review', 'interview_scheduled'].includes(a.status)
       ).length
@@ -114,8 +113,8 @@ export default function DashboardPage() {
         a.status === 'approved'
       ).length
 
-      // Load certificates
-      const certsRes = await fetch('/api/admin/certificates?scholarId=mine')
+      // Load user's own certificates
+      const certsRes = await fetch('/api/my/certificates')
       const certsResult = await certsRes.json()
       const certsData = certsResult.data || []
 
@@ -177,7 +176,7 @@ export default function DashboardPage() {
       {/* Welcome Section */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold font-arabic mb-2">
-          مرحباً {profile?.full_name || 'بك'}
+          مرحباً {profile?.fullName || profile?.full_name || 'بك'}
         </h1>
         <p className="text-muted-foreground font-arabic">
           نظام الإجازة الإلكتروني - لوحة التحكم الشخصية
@@ -378,17 +377,17 @@ export default function DashboardPage() {
                         </div>
                         <div>
                           <p className="font-medium font-arabic">
-                            إجازة {getIjazahTypeLabel(app.ijazah_type)}
+                            إجازة {getIjazahTypeLabel(app.ijazahType)}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {app.application_number}
+                            {app.applicationNumber}
                           </p>
                         </div>
                       </div>
                       <div className="text-left">
                         {getStatusBadge(app.status)}
                         <p className="text-xs text-muted-foreground mt-1">
-                          {format(new Date(app.created_at), 'd MMM yyyy', { locale: ar })}
+                          {app.createdAt ? format(new Date(app.createdAt), 'd MMM yyyy', { locale: ar }) : ''}
                         </p>
                       </div>
                     </div>
@@ -433,17 +432,17 @@ export default function DashboardPage() {
                         </div>
                         <div>
                           <p className="font-medium font-arabic">
-                            {cert.recitation || getIjazahTypeLabel(cert.ijazah_type)}
+                            {cert.recitation || getIjazahTypeLabel(cert.ijazahType)}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {cert.certificate_number}
+                            {cert.certificateNumber}
                           </p>
                         </div>
                       </div>
                       <div className="text-left">
                         {getStatusBadge(cert.status)}
                         <p className="text-xs text-muted-foreground mt-1">
-                          {format(new Date(cert.issue_date), 'd MMM yyyy', { locale: ar })}
+                          {cert.issueDate ? format(new Date(cert.issueDate), 'd MMM yyyy', { locale: ar }) : ''}
                         </p>
                       </div>
                     </div>
