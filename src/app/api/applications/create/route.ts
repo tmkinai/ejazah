@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { randomBytes } from 'crypto'
+import { sendApplicationSubmittedEmail } from '@/lib/email-service'
 
 export async function POST(request: Request) {
   try {
@@ -19,10 +21,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const applicationNumber = `IJZ-${Date.now()}-${Math.random()
-      .toString(36)
-      .substring(2, 8)
-      .toUpperCase()}`
+    const applicationNumber = `IJZ-${Date.now()}-${randomBytes(4).toString('hex').toUpperCase()}`
 
     const application = await prisma.ijazahApplication.create({
       data: {
@@ -36,6 +35,22 @@ export async function POST(request: Request) {
         submittedAt: new Date(),
       },
     })
+
+    // Send confirmation email (non-blocking)
+    const profile = await prisma.profile.findUnique({
+      where: { id: session.user.id },
+      select: { fullName: true, email: true },
+    })
+    if (profile?.email) {
+      sendApplicationSubmittedEmail({
+        email: profile.email,
+        name: profile.fullName || 'المتقدم',
+        applicationNumber,
+        ijazahType: ijazahType.ijazahType,
+        submittedDate: new Date().toLocaleDateString('ar-SA'),
+        applicationUrl: `${process.env.NEXT_PUBLIC_APP_URL}/applications`,
+      }).catch(console.error)
+    }
 
     return NextResponse.json(
       {

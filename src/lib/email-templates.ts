@@ -1,4 +1,11 @@
-// Email notification templates for different notification types
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+}
 
 interface EmailTemplate {
   subject: string
@@ -46,27 +53,27 @@ export const emailTemplates = {
     </div>
     <div class="content">
       <h2>السلام عليكم ورحمة الله وبركاته</h2>
-      <p>عزيزي/عزيزتي <strong>${data.recipientName}</strong>،</p>
-      
+      <p>عزيزي/عزيزتي <strong>${escapeHtml(data.recipientName)}</strong>،</p>
+
       <p>نشكركم على تقديم طلب الإجازة في نظامنا. تم استلام طلبكم بنجاح وسيتم مراجعته قريبًا إن شاء الله.</p>
-      
+
       <div class="info-box">
         <strong>تفاصيل الطلب:</strong>
-        <p>رقم الطلب: <strong>${data.applicationNumber}</strong></p>
-        <p>نوع الإجازة: <strong>${data.ijazahType}</strong></p>
-        <p>تاريخ التقديم: <strong>${data.submittedDate}</strong></p>
+        <p>رقم الطلب: <strong>${escapeHtml(data.applicationNumber)}</strong></p>
+        <p>نوع الإجازة: <strong>${escapeHtml(data.ijazahType)}</strong></p>
+        <p>تاريخ التقديم: <strong>${escapeHtml(data.submittedDate)}</strong></p>
       </div>
-      
+
       <p>سيتم إعلامكم عبر البريد الإلكتروني بأي تحديثات على حالة طلبكم.</p>
-      
+
       <center>
-        <a href="${data.applicationUrl}" class="button">
+        <a href="${escapeHtml(data.applicationUrl)}" class="button">
           عرض حالة الطلب
         </a>
       </center>
-      
+
       <div class="divider"></div>
-      
+
       <p style="color: #7F8C8D; font-size: 14px;">
         يمكنكم متابعة حالة طلبكم في أي وقت من خلال لوحة التحكم الخاصة بكم.
       </p>
@@ -104,7 +111,7 @@ export const emailTemplates = {
 
   // Application status changed
   applicationStatusChanged: (data: EmailData): EmailTemplate => ({
-    subject: `📢 تحديث حالة طلب الإجازة - ${data.statusArabic}`,
+    subject: `📢 تحديث حالة طلب الإجازة - ${escapeHtml(data.statusArabic)}`,
     html: `
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
@@ -120,7 +127,7 @@ export const emailTemplates = {
     .content { padding: 40px; }
     .content h2 { color: #1B4332; font-size: 22px; margin-bottom: 20px; font-family: 'Amiri', serif; }
     .content p { color: #2C3E50; line-height: 1.8; margin-bottom: 15px; }
-    .status-badge { display: inline-block; background: ${data.statusColor || '#1B4332'}; color: white; padding: 10px 20px; border-radius: 20px; font-weight: 600; margin: 20px 0; }
+    .status-badge { display: inline-block; background: ${escapeHtml(data.statusColor || '#1B4332')}; color: white; padding: 10px 20px; border-radius: 20px; font-weight: 600; margin: 20px 0; }
     .info-box { background: #F5F0E6; border-right: 4px solid #B8860B; padding: 20px; margin: 20px 0; border-radius: 8px; }
     .button { display: inline-block; background: linear-gradient(135deg, #B8860B 0%, #D4AF37 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; margin: 20px 0; }
     .footer { background: #F5F0E6; padding: 30px; text-center; color: #7F8C8D; font-size: 14px; }
@@ -134,21 +141,21 @@ export const emailTemplates = {
     </div>
     <div class="content">
       <h2>السلام عليكم ورحمة الله وبركاته</h2>
-      <p>عزيزي/عزيزتي <strong>${data.recipientName}</strong>،</p>
-      
+      <p>عزيزي/عزيزتي <strong>${escapeHtml(data.recipientName)}</strong>،</p>
+
       <p>تم تحديث حالة طلب الإجازة الخاص بكم:</p>
-      
+
       <center>
-        <div class="status-badge">${data.statusArabic}</div>
+        <div class="status-badge">${escapeHtml(data.statusArabic)}</div>
       </center>
-      
+
       <div class="info-box">
-        <p><strong>رقم الطلب:</strong> ${data.applicationNumber}</p>
-        ${data.notes ? `<p><strong>ملاحظات المراجع:</strong></p><p>${data.notes}</p>` : ''}
+        <p><strong>رقم الطلب:</strong> ${escapeHtml(data.applicationNumber)}</p>
+        ${data.notes ? `<p><strong>ملاحظات المراجع:</strong></p><p>${escapeHtml(data.notes)}</p>` : ''}
       </div>
-      
+
       <center>
-        <a href="${data.applicationUrl}" class="button">
+        <a href="${escapeHtml(data.applicationUrl)}" class="button">
           عرض تفاصيل الطلب
         </a>
       </center>
@@ -218,30 +225,30 @@ ${data.notes ? `ملاحظات المراجع: ${data.notes}` : ''}
         <p>﴿وَقُلْ رَبِّ زِدْنِي عِلْماً﴾</p>
         <p style="font-size: 14px; color: #7F8C8D;">طه: 114</p>
       </div>
-      
+
       <h2>السلام عليكم ورحمة الله وبركاته</h2>
-      <p>عزيزي/عزيزتي <strong>${data.recipientName}</strong>،</p>
-      
+      <p>عزيزي/عزيزتي <strong>${escapeHtml(data.recipientName)}</strong>،</p>
+
       <p>نبارك لكم إتمام مراحل الإجازة بنجاح! تم إصدار شهادة الإجازة الخاصة بكم.</p>
-      
+
       <div class="certificate-box">
         <p style="color: #7F8C8D; margin-bottom: 10px;">رقم الشهادة</p>
-        <div class="certificate-number">${data.certificateNumber}</div>
-        <p style="color: #7F8C8D; margin-top: 10px;">نوع الإجازة: <strong style="color: #1B4332;">${data.ijazahType}</strong></p>
-        <p style="color: #7F8C8D;">الشيخ المُجيز: <strong style="color: #1B4332;">${data.scholarName}</strong></p>
+        <div class="certificate-number">${escapeHtml(data.certificateNumber)}</div>
+        <p style="color: #7F8C8D; margin-top: 10px;">نوع الإجازة: <strong style="color: #1B4332;">${escapeHtml(data.ijazahType)}</strong></p>
+        <p style="color: #7F8C8D;">الشيخ المُجيز: <strong style="color: #1B4332;">${escapeHtml(data.scholarName)}</strong></p>
       </div>
-      
+
       <p>يمكنكم الآن عرض شهادتكم وتنزيلها ومشاركتها مع الآخرين.</p>
-      
+
       <center>
-        <a href="${data.certificateUrl}" class="button">
+        <a href="${escapeHtml(data.certificateUrl)}" class="button">
           عرض الشهادة
         </a>
-        <a href="${data.downloadUrl}" class="button button-secondary">
+        <a href="${escapeHtml(data.downloadUrl)}" class="button button-secondary">
           تنزيل PDF
         </a>
       </center>
-      
+
       <p style="margin-top: 30px; color: #7F8C8D; font-size: 14px; text-align: center;">
         💡 يمكن للجميع التحقق من صحة شهادتكم من خلال صفحة التحقق العامة
       </p>
@@ -313,24 +320,24 @@ ${data.notes ? `ملاحظات المراجع: ${data.notes}` : ''}
     </div>
     <div class="content">
       <h2>السلام عليكم ورحمة الله وبركاته</h2>
-      <p>فضيلة الشيخ <strong>${data.recipientName}</strong>،</p>
-      
+      <p>فضيلة الشيخ <strong>${escapeHtml(data.recipientName)}</strong>،</p>
+
       <p>تم تعيين طلب إجازة جديد لمراجعتكم الكريمة.</p>
-      
+
       <div class="info-box ${data.isUrgent ? 'urgent' : ''}">
-        <p><strong>رقم الطلب:</strong> ${data.applicationNumber}</p>
-        <p><strong>نوع الإجازة:</strong> ${data.ijazahType}</p>
-        <p><strong>اسم الطالب:</strong> ${data.studentName}</p>
-        <p><strong>تاريخ التقديم:</strong> ${data.submittedDate}</p>
+        <p><strong>رقم الطلب:</strong> ${escapeHtml(data.applicationNumber)}</p>
+        <p><strong>نوع الإجازة:</strong> ${escapeHtml(data.ijazahType)}</p>
+        <p><strong>اسم الطالب:</strong> ${escapeHtml(data.studentName)}</p>
+        <p><strong>تاريخ التقديم:</strong> ${escapeHtml(data.submittedDate)}</p>
         ${data.isUrgent ? '<p style="color: #FF6B6B; font-weight: 600;">⚠️ عاجل - يتطلب مراجعة فورية</p>' : ''}
       </div>
-      
+
       <center>
-        <a href="${data.reviewUrl}" class="button">
+        <a href="${escapeHtml(data.reviewUrl)}" class="button">
           مراجعة الطلب
         </a>
       </center>
-      
+
       <p style="color: #7F8C8D; font-size: 14px; margin-top: 30px;">
         يمكنكم الوصول إلى جميع الطلبات المعينة لكم من خلال لوحة التحكم الخاصة بكم.
       </p>

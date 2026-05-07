@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { parseRoles } from '@/lib/auth-utils'
+import { randomBytes } from 'crypto'
 import QRCode from 'qrcode'
+import { sendCertificateIssuedEmail } from '@/lib/email-service'
 
-// Helper to generate certificate number
 function generateCertificateNumber(ijazahType: string): string {
   const prefix = ijazahType.toUpperCase().substring(0, 3)
   const year = new Date().getFullYear()
-  const random = Math.random().toString(36).substring(2, 8).toUpperCase()
+  const random = randomBytes(4).toString('hex').toUpperCase()
   return `${prefix}-${year}-${random}`
 }
 
@@ -19,13 +20,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Check if user is scholar or admin
     const profile = await prisma.profile.findUnique({
       where: { id: session.user.id },
       select: { roles: true },
     })
     const roles = parseRoles(profile?.roles)
-    if (!roles.includes('scholar') && !roles.includes('admin')) {
+    const isAdmin = roles.includes('admin')
+    const isScholar = roles.includes('scholar')
+
+    if (!isScholar && !isAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -36,7 +39,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Application ID is required' }, { status: 400 })
     }
 
-    // Fetch application with related data
     const application = await prisma.ijazahApplication.findFirst({
       where: { id: application_id, status: 'approved' },
       include: {
@@ -57,7 +59,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Application not found or not approved' }, { status: 404 })
     }
 
-    // Check if certificate already exists
+    // Scholars may only generate certificates for their own assigned applications
+    if (isScholar && !isAdmin && application.scholarId !== session.user.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const existingCert = await prisma.ijazahCertificate.findFirst({
       where: { applicationId: application_id },
       select: { id: true, certificateNumber: true },
@@ -72,9 +78,8 @@ export async function POST(request: NextRequest) {
     }
 
     const certificateNumber = generateCertificateNumber(application.ijazahType)
-    const verificationHash = `${certificateNumber}-${Date.now()}-${Math.random().toString(36).substring(7)}`
+    const verificationHash = `${certificateNumber}-${randomBytes(8).toString('hex')}`
 
-    // Generate QR code
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://ijazah.app'
     const verificationUrl = `${appUrl}/verify/${certificateNumber}`
     const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl, {
@@ -85,10 +90,8 @@ export async function POST(request: NextRequest) {
       color: { dark: '#1B4332', light: '#FFFFFF' },
     })
 
-    // Extract quranExperience safely
     const quranExp = application.quranExperience as Record<string, any> | null
 
-    // Create certificate
     const certificate = await prisma.ijazahCertificate.create({
       data: {
         applicationId: application.id,
@@ -111,12 +114,24 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Increment scholar's total ijazat issued
     if (application.scholarId) {
       await prisma.scholar.update({
         where: { id: application.scholarId },
         data: { totalIjazatIssued: { increment: 1 } },
       })
+    }
+
+    // Send certificate issued email (non-blocking)
+    if (application.userProfile?.email) {
+      sendCertificateIssuedEmail({
+        email: application.userProfile.email,
+        name: application.userProfile.fullName || application.userProfile.fullNameArabic || 'الطالب',
+        certificateNumber,
+        scholarName: application.scholar?.profile?.fullName || application.scholar?.profile?.fullNameArabic || 'الشيخ',
+        ijazahType: application.ijazahType,
+        certificateUrl: `${appUrl}/certificates/${certificate.id}`,
+        downloadUrl: `${appUrl}/certificates/${certificate.id}`,
+      }).catch(console.error)
     }
 
     return NextResponse.json({

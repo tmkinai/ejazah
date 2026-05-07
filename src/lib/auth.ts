@@ -3,24 +3,15 @@ import Google from 'next-auth/providers/google'
 import Credentials from 'next-auth/providers/credentials'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
-import { writeFileSync } from 'fs'
 import type { Adapter } from 'next-auth/adapters'
 
-function log(label: string, data: any) {
-  const msg = `[${new Date().toISOString()}] ${label}: ${typeof data === 'string' ? data : JSON.stringify(data, null, 2)}\n`
-  try { writeFileSync('/tmp/authjs-error.log', msg, { flag: 'a' }) } catch {}
-}
-
-// Custom adapter that logs every operation and its errors
 function CustomPrismaAdapter(): Adapter {
   return {
     async createUser(data) {
-      log('ADAPTER_createUser', data)
-      try {
-        const user = await prisma.user.create({ data: { name: data.name, email: data.email!, image: data.image, emailVerified: data.emailVerified } })
-        log('ADAPTER_createUser_OK', user)
-        return user as any
-      } catch (e: any) { log('ADAPTER_createUser_ERROR', e.message); throw e }
+      const user = await prisma.user.create({
+        data: { name: data.name, email: data.email!, image: data.image, emailVerified: data.emailVerified },
+      })
+      return user as any
     },
     async getUser(id) {
       const user = await prisma.user.findUnique({ where: { id } })
@@ -31,15 +22,11 @@ function CustomPrismaAdapter(): Adapter {
       return user as any
     },
     async getUserByAccount({ providerAccountId, provider }) {
-      log('ADAPTER_getUserByAccount', { provider, providerAccountId })
-      try {
-        const account = await prisma.account.findUnique({
-          where: { provider_providerAccountId: { provider, providerAccountId } },
-          select: { user: true },
-        })
-        log('ADAPTER_getUserByAccount_OK', account?.user || null)
-        return (account?.user ?? null) as any
-      } catch (e: any) { log('ADAPTER_getUserByAccount_ERROR', e.message); throw e }
+      const account = await prisma.account.findUnique({
+        where: { provider_providerAccountId: { provider, providerAccountId } },
+        select: { user: true },
+      })
+      return (account?.user ?? null) as any
     },
     async updateUser(data) {
       const user = await prisma.user.update({ where: { id: data.id }, data })
@@ -49,28 +36,23 @@ function CustomPrismaAdapter(): Adapter {
       await prisma.user.delete({ where: { id: userId } })
     },
     async linkAccount(data) {
-      log('ADAPTER_linkAccount', Object.keys(data))
-      try {
-        // Only pass fields that exist in our schema
-        const account = await prisma.account.create({
-          data: {
-            userId: data.userId,
-            type: data.type,
-            provider: data.provider,
-            providerAccountId: data.providerAccountId,
-            refresh_token: data.refresh_token,
-            access_token: data.access_token,
-            expires_at: data.expires_at,
-            expires_in: (data as any).expires_in,
-            token_type: data.token_type,
-            scope: data.scope as string | undefined,
-            id_token: data.id_token as string | undefined,
-            session_state: data.session_state as string | undefined,
-          },
-        })
-        log('ADAPTER_linkAccount_OK', account.id)
-        return account as any
-      } catch (e: any) { log('ADAPTER_linkAccount_ERROR', e.message); throw e }
+      const account = await prisma.account.create({
+        data: {
+          userId: data.userId,
+          type: data.type,
+          provider: data.provider,
+          providerAccountId: data.providerAccountId,
+          refresh_token: data.refresh_token,
+          access_token: data.access_token,
+          expires_at: data.expires_at,
+          expires_in: (data as any).expires_in,
+          token_type: data.token_type,
+          scope: data.scope as string | undefined,
+          id_token: data.id_token as string | undefined,
+          session_state: data.session_state as string | undefined,
+        },
+      })
+      return account as any
     },
     async unlinkAccount({ providerAccountId, provider }) {
       await prisma.account.delete({ where: { provider_providerAccountId: { provider, providerAccountId } } })
@@ -103,14 +85,8 @@ function CustomPrismaAdapter(): Adapter {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  debug: true,
   trustHost: true,
   adapter: CustomPrismaAdapter(),
-  logger: {
-    error(error) { log('AUTH_ERROR', error?.message || error) },
-    warn(code) { log('AUTH_WARN', code) },
-    debug(message, metadata) { log('AUTH_DEBUG', `${message} ${JSON.stringify(metadata)}`) },
-  },
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -140,9 +116,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) token.id = user.id
       if (token.id) {
         try {
-          const profile = await prisma.profile.findUnique({ where: { id: token.id as string }, select: { roles: true } })
+          const profile = await prisma.profile.findUnique({
+            where: { id: token.id as string },
+            select: { roles: true },
+          })
           token.roles = profile?.roles ?? ['student']
-        } catch { token.roles = ['student'] }
+        } catch {
+          token.roles = ['student']
+        }
       }
       return token
     },
@@ -159,10 +140,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const existing = await prisma.profile.findUnique({ where: { id: user.id } })
           if (!existing) {
             await prisma.profile.create({
-              data: { id: user.id, fullName: user.name, email: user.email || '', avatarUrl: user.image, roles: JSON.stringify(['student']) },
+              data: {
+                id: user.id,
+                fullName: user.name,
+                email: user.email || '',
+                avatarUrl: user.image,
+                roles: JSON.stringify(['student']),
+              },
             })
           }
-        } catch (e: any) { log('PROFILE_CREATE_ERROR', e.message) }
+        } catch (e) {
+          console.error('Profile create error on signIn:', e)
+        }
       }
       return true
     },
@@ -174,10 +163,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const existing = await prisma.profile.findUnique({ where: { id: user.id } })
           if (!existing) {
             await prisma.profile.create({
-              data: { id: user.id, fullName: user.name, email: user.email, avatarUrl: user.image, roles: JSON.stringify(['student']) },
+              data: {
+                id: user.id,
+                fullName: user.name,
+                email: user.email,
+                avatarUrl: user.image,
+                roles: JSON.stringify(['student']),
+              },
             })
           }
-        } catch (e: any) { log('PROFILE_CREATE_EVENT_ERROR', e.message) }
+        } catch (e) {
+          console.error('Profile create error on createUser event:', e)
+        }
       }
     },
   },

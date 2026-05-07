@@ -14,6 +14,14 @@ import { ar } from 'date-fns/locale'
 import { QRCodeSVG } from 'qrcode.react'
 import html2canvas from 'html2canvas'
 
+function sanitizeHtml(html: string): string {
+  return html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi, '')
+    .replace(/javascript\s*:/gi, '')
+    .replace(/data\s*:/gi, '')
+}
+
 interface CertificateViewProps {
   certificateId: string
   onBack?: () => void
@@ -740,7 +748,7 @@ export default function CertificateView({ certificateId, onBack }: CertificateVi
                     textAlign: 'justify',
                     textJustify: 'inter-word',
                   }}
-                  dangerouslySetInnerHTML={{ __html: ijazahText }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(ijazahText) }}
                 />
               )}
             </div>
