@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { signIn } from 'next-auth/react'
+import { signIn, getSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -56,8 +56,14 @@ export function LoginForm() {
         return
       }
 
-      router.push('/dashboard')
-      router.refresh()
+      // Check if 2FA is required before redirecting
+      const session = await getSession()
+      if ((session?.user as any)?.requiresTwoFactor) {
+        router.push('/auth/2fa')
+      } else {
+        router.push('/dashboard')
+        router.refresh()
+      }
     } catch (err) {
       setServerError('حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.')
       setLoading(false)

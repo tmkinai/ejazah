@@ -3,6 +3,7 @@ import Google from 'next-auth/providers/google'
 import Credentials from 'next-auth/providers/credentials'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
+import { authenticator } from 'otplib'
 import type { Adapter } from 'next-auth/adapters'
 
 function CustomPrismaAdapter(): Adapter {
@@ -84,7 +85,7 @@ function CustomPrismaAdapter(): Adapter {
   }
 }
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
   trustHost: true,
   adapter: CustomPrismaAdapter(),
   providers: [
@@ -101,36 +102,82 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null
+
         const user = await prisma.user.findUnique({ where: { email: credentials.email as string } })
         if (!user || !user.hashedPassword) return null
+
         const isValid = await bcrypt.compare(credentials.password as string, user.hashedPassword)
         if (!isValid) return null
-        return { id: user.id, email: user.email, name: user.name, image: user.image }
+
+        const profile = await prisma.profile.findUnique({
+          where: { id: user.id },
+          select: { totpEnabled: true },
+        })
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          image: user.image,
+          requiresTwoFactor: profile?.totpEnabled ?? false,
+        }
       },
     }),
   ],
   session: { strategy: 'jwt' },
   pages: { signIn: '/auth/login', newUser: '/dashboard' },
   callbacks: {
-    async jwt({ token, user }) {
-      if (user) token.id = user.id
-      if (token.id) {
+    async jwt({ token, user, trigger, session: updateData }) {
+      // Initial sign-in — load profile data from DB once
+      if (user) {
+        token.id = user.id
         try {
           const profile = await prisma.profile.findUnique({
-            where: { id: token.id as string },
+            where: { id: user.id },
             select: { roles: true },
           })
-          token.roles = profile?.roles ?? ['student']
+          token.roles = (profile?.roles as string[]) ?? ['student']
         } catch {
           token.roles = ['student']
         }
+        token.requiresTwoFactor = (user as any).requiresTwoFactor ?? false
+        token.totpAttempts = 0
       }
+
+      // Handle TOTP verification — called by useSession().update({ totpCode })
+      if (trigger === 'update' && (updateData as any)?.totpCode && token.requiresTwoFactor && token.id) {
+        const attempts = (token.totpAttempts as number) ?? 0
+        if (attempts >= 5) return token // rate limit
+
+        try {
+          const profile = await prisma.profile.findUnique({
+            where: { id: token.id as string },
+            select: { totpSecret: true, totpEnabled: true },
+          })
+          if (profile?.totpSecret && profile.totpEnabled) {
+            const isValid = authenticator.verify({
+              token: (updateData as any).totpCode,
+              secret: profile.totpSecret,
+            })
+            if (isValid) {
+              token.requiresTwoFactor = false
+              token.totpAttempts = 0
+            } else {
+              token.totpAttempts = attempts + 1
+            }
+          }
+        } catch {
+          // leave token unchanged
+        }
+      }
+
       return token
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string
         ;(session.user as any).roles = token.roles
+        ;(session.user as any).requiresTwoFactor = token.requiresTwoFactor ?? false
       }
       return session
     },

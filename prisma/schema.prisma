@@ -82,6 +82,8 @@ model Profile {
   isVerified        Boolean  @default(false) @map("is_verified")
   verificationLevel String   @default("none") @map("verification_level")
   roles             Json     @default("[\"student\"]")
+  totpSecret        String?  @map("totp_secret") @db.Text
+  totpEnabled       Boolean  @default(false) @map("totp_enabled")
   metadata          Json     @default("{}")
   preferences       Json     @default("{}")
   createdAt         DateTime @default(now()) @map("created_at")
